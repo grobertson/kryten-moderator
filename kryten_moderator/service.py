@@ -8,7 +8,6 @@ from kryten import KrytenClient
 
 from kryten_moderator.config import Config
 
-
 logger = logging.getLogger(__name__)
 
 
