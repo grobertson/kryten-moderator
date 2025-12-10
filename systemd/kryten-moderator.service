@@ -1,0 +1,28 @@
+[Unit]
+Description=Kryten Moderator Service
+After=network.target nats.service
+Wants=nats.service
+
+[Service]
+Type=simple
+User=kryten
+Group=kryten
+WorkingDirectory=/opt/kryten-moderator
+Environment="PATH=/opt/kryten-moderator/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/kryten-moderator/.venv/bin/kryten-moderator --config /etc/kryten/moderator/config.json
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kryten-moderator
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/kryten-moderator
+ReadOnlyPaths=/etc/kryten/moderator
+
+[Install]
+WantedBy=multi-user.target
