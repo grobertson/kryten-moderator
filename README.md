@@ -34,8 +34,8 @@ cp config.example.json config.json
 ```json
 {
   "nats_url": "nats://localhost:4222",
-  "nats_subject_prefix": "cytube",
-  "service_name": "kryten-moderator"
+  "nats_subject_prefix": "kryten",
+  "service_name": "moderator"
 }
 ```
 

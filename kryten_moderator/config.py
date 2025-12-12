@@ -34,9 +34,9 @@ class Config:
     @property
     def nats_subject_prefix(self) -> str:
         """Get NATS subject prefix."""
-        return self.get("nats_subject_prefix", "cytube")
+        return self.get("nats_subject_prefix", "kryten")
 
     @property
     def service_name(self) -> str:
         """Get service name."""
-        return self.get("service_name", "kryten-moderator")
+        return self.get("service_name", "moderator")
