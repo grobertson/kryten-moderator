@@ -1,5 +1,44 @@
 {
-  "nats_url": "nats://localhost:4222",
-  "nats_subject_prefix": "kryten",
-  "service_name": "moderator"
+  "service": {
+    "name": "moderator",
+    "enable_lifecycle": true,
+    "enable_heartbeat": true,
+    "heartbeat_interval": 30,
+    "enable_discovery": true
+  },
+  "nats": {
+    "servers": ["nats://localhost:4222"],
+    "user": "${NATS_USER}",
+    "password": "${NATS_PASSWORD}"
+  },
+  "channels": [
+    {
+      "domain": "cytu.be",
+      "channel": "your_channel_here"
+    }
+  ],
+  "metrics": {
+    "port": 28284
+  },
+  "moderation": {
+    "enable_ip_correlation": true,
+    "enable_pattern_matching": true,
+    "default_patterns": [
+      "1488",
+      "卐",
+      "卍",
+      {"pattern": "^.*14/?88.*$", "is_regex": true, "action": "ban", "description": "Nazi hate numbers"},
+      {"pattern": "^.*h[i1]tl[e3]r.*$", "is_regex": true, "action": "ban", "description": "Hitler references"},
+      {"pattern": "^.*n[i1]gg[e3a]r.*$", "is_regex": true, "action": "ban", "description": "Racial slur"},
+      {"pattern": "^.*f[a@]gg[o0]t.*$", "is_regex": true, "action": "ban", "description": "Homophobic slur"}
+    ],
+    "enable_spam_detection": false,
+    "enable_word_filter": false,
+    "enable_rate_limiting": false,
+    "banned_words": [],
+    "max_caps_percent": 80,
+    "max_messages_per_minute": 20
+  },
+  "retry_attempts": 3,
+  "handler_timeout": 30.0
 }

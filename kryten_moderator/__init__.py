@@ -1,22 +1,26 @@
-"""Kryten Moderator Service - Chat moderation and filtering."""
+"""Kryten Moderator Service - Chat moderation and filtering.
 
-import os
-from pathlib import Path
+kryten-moderator is a microservice that provides chat moderation capabilities
+for CyTube channels through the Kryten bridge, including:
 
+- Spam detection and filtering
+- Word/phrase filtering (banned words)
+- User tracking (joins/leaves)
+- Rate limiting
+- Flood protection
 
-def _read_version() -> str:
-    """Read version from VERSION file."""
-    # Try package root first
-    version_file = Path(__file__).parent / "VERSION"
-    if version_file.exists():
-        return version_file.read_text().strip()
+It exposes control via:
+- NATS request/reply endpoints (kryten.moderator.command)
 
-    # Try repository root
-    version_file = Path(__file__).parent.parent / "VERSION"
-    if version_file.exists():
-        return version_file.read_text().strip()
+For more information, see:
+- README.md for setup and usage
+- INSTALL.md for installation instructions
+"""
 
-    return "0.0.0"
+__version__ = "0.3.0"
+__author__ = "Kryten Contributors"
+__license__ = "MIT"
 
+from .service import ModeratorService
 
-__version__ = _read_version()
+__all__ = ["ModeratorService"]
