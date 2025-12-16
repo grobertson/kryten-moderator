@@ -75,7 +75,7 @@ class ModeratorService:
 
     def _load_config(self) -> None:
         """Load configuration from file."""
-        with open(self.config_path) as f:
+        with open(self.config_path, encoding="utf-8") as f:
             self.config = json.load(f)
 
         # Override version from package to ensure it stays in sync

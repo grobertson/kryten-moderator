@@ -26,7 +26,7 @@ exclude = ["config.json", "config-*.json", "logs/*", "*.log"]
 
 [tool.poetry.dependencies]
 python = ">=3.10"
-kryten-py = ">=0.9.4"
+kryten-py = "0.9.7"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
