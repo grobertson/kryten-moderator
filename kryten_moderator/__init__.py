@@ -17,7 +17,13 @@ For more information, see:
 - INSTALL.md for installation instructions
 """
 
-__version__ = "0.3.0"
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("kryten-moderator")
+except PackageNotFoundError:
+    __version__ = "0.0.0"
+
 __author__ = "Kryten Contributors"
 __license__ = "MIT"
 

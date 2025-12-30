@@ -132,6 +132,7 @@ class PatternManager:
         self.logger = logging.getLogger(__name__)
         self._patterns: dict[str, CompiledPattern] = {}  # key -> CompiledPattern
         self._initialized = False
+        self._kv = None  # KV bucket reference
 
     @staticmethod
     def _make_key(pattern: str) -> str:
@@ -173,6 +174,12 @@ class PatternManager:
             return
 
         try:
+            # Get or create the bucket - moderator owns this bucket
+            self._kv = await self.client.get_or_create_kv_bucket(
+                self.bucket_name,
+                description=f"Kryten moderator patterns for {self.domain}/{self.channel}",
+            )
+
             keys = await self.client.kv_keys(self.bucket_name)
 
             for key in keys:
@@ -200,16 +207,9 @@ class PatternManager:
             if not self._patterns and default_patterns:
                 await self._add_default_patterns(default_patterns)
 
-        except Exception:
-            self._initialized = True
-            self.logger.info(
-                f"Pattern manager initialized for {self.domain}/{self.channel}: "
-                f"0 patterns (new bucket)"
-            )
-
-            # Add defaults for new bucket
-            if default_patterns:
-                await self._add_default_patterns(default_patterns)
+        except Exception as e:
+            self.logger.error(f"Failed to initialize pattern manager: {e}")
+            raise
 
     async def _add_default_patterns(self, patterns: list) -> None:
         """Add default patterns on first startup.

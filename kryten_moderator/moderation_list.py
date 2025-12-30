@@ -95,6 +95,7 @@ class ModerationList:
         self.logger = logging.getLogger(__name__)
         self._cache: dict[str, ModerationEntry] = {}
         self._initialized = False
+        self._kv = None  # KV bucket reference
 
     async def initialize(self) -> None:
         """Initialize KV bucket and load entries into cache."""
@@ -102,10 +103,14 @@ class ModerationList:
             return
 
         try:
-            # Get or create the bucket - kryten-py handles this
-            keys = await self.client.kv_keys(self.bucket_name)
+            # Get or create the bucket - moderator owns this bucket
+            self._kv = await self.client.get_or_create_kv_bucket(
+                self.bucket_name,
+                description=f"Kryten moderator entries for {self.domain}/{self.channel}",
+            )
 
             # Load all entries into cache
+            keys = await self.client.kv_keys(self.bucket_name)
             for key in keys:
                 try:
                     data = await self.client.kv_get(
@@ -124,13 +129,9 @@ class ModerationList:
                 f"{len(self._cache)} entries loaded"
             )
 
-        except Exception:
-            # Bucket might not exist yet, that's fine
-            self._initialized = True
-            self.logger.info(
-                f"Moderation list initialized for {self.domain}/{self.channel}: "
-                f"0 entries (new bucket)"
-            )
+        except Exception as e:
+            self.logger.error(f"Failed to initialize moderation list: {e}")
+            raise
 
     async def add(
         self,

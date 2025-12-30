@@ -52,6 +52,7 @@ class IPManager:
         self.logger = logging.getLogger(__name__)
         self._cache: dict[str, list[str]] = {}  # IP -> [usernames]
         self._initialized = False
+        self._kv = None  # KV bucket reference
 
     async def initialize(self) -> None:
         """Initialize KV bucket and load mappings into cache."""
@@ -59,6 +60,12 @@ class IPManager:
             return
 
         try:
+            # Get or create the bucket - moderator owns this bucket
+            self._kv = await self.client.get_or_create_kv_bucket(
+                self.bucket_name,
+                description=f"Kryten moderator IP mappings for {self.domain}/{self.channel}",
+            )
+
             keys = await self.client.kv_keys(self.bucket_name)
 
             for key in keys:
@@ -77,12 +84,9 @@ class IPManager:
                 f"{len(self._cache)} IP mappings loaded"
             )
 
-        except Exception:
-            self._initialized = True
-            self.logger.info(
-                f"IP manager initialized for {self.domain}/{self.channel}: "
-                f"0 mappings (new bucket)"
-            )
+        except Exception as e:
+            self.logger.error(f"Failed to initialize IP manager: {e}")
+            raise
 
     async def add_ip(self, ip: str, username: str) -> None:
         """Associate an IP with a username.

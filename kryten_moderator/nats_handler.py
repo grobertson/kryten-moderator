@@ -94,6 +94,7 @@ class ModeratorCommandHandler:
 
         # Dispatch to handler
         handler_map = {
+            "system.ping": self._handle_system_ping,
             "system.health": self._handle_system_health,
             "system.stats": self._handle_system_stats,
             # Moderation entry commands
@@ -122,6 +123,25 @@ class ModeratorCommandHandler:
         except Exception as e:  # noqa: BLE001
             self.logger.error(f"Error executing command '{command}': {e}", exc_info=True)
             return {"service": "moderator", "command": command, "success": False, "error": str(e)}
+
+    async def _handle_system_ping(self, request: dict) -> dict:
+        """Handle system.ping query - Simple liveness check with metadata."""
+        import time
+        from datetime import datetime
+
+        from . import __version__
+
+        # Get metrics port from config
+        metrics_port = self.app.config.get("metrics", {}).get("port", 28284)
+
+        return {
+            "pong": True,
+            "service": "moderator",
+            "version": __version__,
+            "uptime_seconds": self.app.get_uptime_seconds(),
+            "timestamp": datetime.now().isoformat(),
+            "metrics_endpoint": f"http://localhost:{metrics_port}/metrics",
+        }
 
     async def _handle_system_health(self, request: dict) -> dict:
         """Handle system.health query - Get service health status."""
