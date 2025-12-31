@@ -48,6 +48,7 @@ class ModerationEntry:
         ip_correlation_source: Original username if this was auto-added via IP correlation
         pattern_match: Pattern that matched if this was auto-added via pattern matching
     """
+
     username: str
     action: ActionType
     reason: str | None
@@ -113,9 +114,7 @@ class ModerationList:
             keys = await self.client.kv_keys(self.bucket_name)
             for key in keys:
                 try:
-                    data = await self.client.kv_get(
-                        self.bucket_name, key, parse_json=False
-                    )
+                    data = await self.client.kv_get(self.bucket_name, key, parse_json=False)
                     if data:
                         # kv_get returns bytes when parse_json=False
                         json_str = data.decode() if isinstance(data, bytes) else data
@@ -207,9 +206,7 @@ class ModerationList:
         # Update cache
         del self._cache[key]
 
-        self.logger.info(
-            f"Removed moderation entry for: {username} (channel: {self.channel})"
-        )
+        self.logger.info(f"Removed moderation entry for: {username} (channel: {self.channel})")
         return True
 
     async def get(self, username: str) -> ModerationEntry | None:

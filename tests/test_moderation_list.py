@@ -55,16 +55,18 @@ class TestModerationEntry:
 
     def test_from_json(self):
         """Test deserializing entry from JSON."""
-        json_str = json.dumps({
-            "username": "restored_user",
-            "action": "mute",
-            "reason": "caps spam",
-            "moderator": "system",
-            "timestamp": "2025-12-14T10:00:00+00:00",
-            "ips": ["10.0.0.1"],
-            "ip_correlation_source": None,
-            "pattern_match": None,
-        })
+        json_str = json.dumps(
+            {
+                "username": "restored_user",
+                "action": "mute",
+                "reason": "caps spam",
+                "moderator": "system",
+                "timestamp": "2025-12-14T10:00:00+00:00",
+                "ips": ["10.0.0.1"],
+                "ip_correlation_source": None,
+                "pattern_match": None,
+            }
+        )
 
         entry = ModerationEntry.from_json(json_str)
 

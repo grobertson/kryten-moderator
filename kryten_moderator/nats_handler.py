@@ -406,7 +406,9 @@ class ModeratorCommandHandler:
         """
         try:
             if entry.action == "ban":
-                await self.app.client.kick_user(channel, username, reason=entry.reason, domain=domain)
+                await self.app.client.kick_user(
+                    channel, username, reason=entry.reason, domain=domain
+                )
                 self.logger.info(f"Applied immediate kick to {username} in {channel}")
             elif entry.action == "smute":
                 await self.app.client.shadow_mute_user(channel, username, domain=domain)

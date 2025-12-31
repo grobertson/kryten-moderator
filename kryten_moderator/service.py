@@ -80,6 +80,7 @@ class ModeratorService:
 
         # Override version from package to ensure it stays in sync
         from . import __version__
+
         if "service" not in self.config:
             self.config["service"] = {}
         self.config["service"]["version"] = __version__
@@ -255,7 +256,7 @@ class ModeratorService:
             # Track user
             self._users_tracked.add(event.username.lower())
 
-            domain = getattr(event, 'domain', self._domain)
+            domain = getattr(event, "domain", self._domain)
 
             # Extract IP from event (may be None if not available)
             full_ip, masked_ip = extract_ip_from_event(event)
@@ -263,9 +264,7 @@ class ModeratorService:
 
             # Check moderation list for this channel
             if self.moderation_lists:
-                entry = self.moderation_lists.check_username(
-                    domain, event.channel, event.username
-                )
+                entry = self.moderation_lists.check_username(domain, event.channel, event.username)
 
                 if entry:
                     # User is directly on moderation list
@@ -316,9 +315,7 @@ class ModeratorService:
         except Exception as e:
             self.logger.error(f"Error handling user join: {e}", exc_info=True)
 
-    async def _add_ip_to_entry(
-        self, domain: str, channel: str, username: str, ip: str
-    ) -> None:
+    async def _add_ip_to_entry(self, domain: str, channel: str, username: str, ip: str) -> None:
         """Add an IP to a user's moderation entry and IP map.
 
         Args:
@@ -446,7 +443,7 @@ class ModeratorService:
         """
         username = event.username
         channel = event.channel
-        domain = getattr(event, 'domain', self._domain)
+        domain = getattr(event, "domain", self._domain)
 
         self.logger.info(
             f"Enforcing {entry.action} on {username} in {channel} "
@@ -477,10 +474,7 @@ class ModeratorService:
                 self.logger.info(f"ENFORCED MUTE: Muted {username} in {channel}")
 
         except Exception as e:
-            self.logger.error(
-                f"Failed to enforce {entry.action} on {username}: {e}",
-                exc_info=True
-            )
+            self.logger.error(f"Failed to enforce {entry.action} on {username}: {e}", exc_info=True)
 
     async def _handle_user_leave(self, event: UserLeaveEvent) -> None:
         """Handle user leave event."""
@@ -512,7 +506,8 @@ async def main():
     # Parse arguments
     parser = argparse.ArgumentParser(description="Kryten Moderator Service for CyTube")
     parser.add_argument(
-        "--config", help="Configuration file path (default: /etc/kryten/kryten-moderator/config.json or ./config.json)"
+        "--config",
+        help="Configuration file path (default: /etc/kryten/kryten-moderator/config.json or ./config.json)",
     )
     parser.add_argument("--log-level", default="INFO", help="Logging level")
     args = parser.parse_args()
@@ -520,7 +515,7 @@ async def main():
     # Setup logging first so we can log errors during config validation
     logging.basicConfig(
         level=getattr(logging, args.log_level.upper()),
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
     logger = logging.getLogger(__name__)
 
@@ -529,10 +524,7 @@ async def main():
         config_path = Path(args.config)
     else:
         # Try default locations in order
-        default_paths = [
-            Path("/etc/kryten/kryten-moderator/config.json"),
-            Path("config.json")
-        ]
+        default_paths = [Path("/etc/kryten/kryten-moderator/config.json"), Path("config.json")]
 
         config_path = None
         for path in default_paths:

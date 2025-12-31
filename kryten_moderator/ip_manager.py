@@ -70,9 +70,7 @@ class IPManager:
 
             for key in keys:
                 try:
-                    data = await self.client.kv_get(
-                        self.bucket_name, key, parse_json=True
-                    )
+                    data = await self.client.kv_get(self.bucket_name, key, parse_json=True)
                     if data and isinstance(data, list):
                         self._cache[key] = data
                 except Exception as e:
@@ -119,9 +117,7 @@ class IPManager:
             # Update cache
             self._cache[key] = usernames
 
-            self.logger.debug(
-                f"Associated IP {self._mask_ip(ip)} with user {username}"
-            )
+            self.logger.debug(f"Associated IP {self._mask_ip(ip)} with user {username}")
 
     async def remove_ip(self, ip: str, username: str) -> None:
         """Remove IP association for a username.
@@ -153,9 +149,7 @@ class IPManager:
 
             self._cache[key] = usernames
 
-            self.logger.debug(
-                f"Removed IP {self._mask_ip(ip)} association for {username}"
-            )
+            self.logger.debug(f"Removed IP {self._mask_ip(ip)} association for {username}")
 
     def find_moderated_users_by_ip(
         self,

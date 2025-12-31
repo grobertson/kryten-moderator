@@ -48,6 +48,7 @@ class PatternEntry:
         timestamp: ISO 8601 timestamp when added
         description: Optional description of what this pattern blocks
     """
+
     pattern: str
     is_regex: bool
     action: ActionType
@@ -184,9 +185,7 @@ class PatternManager:
 
             for key in keys:
                 try:
-                    data = await self.client.kv_get(
-                        self.bucket_name, key, parse_json=False
-                    )
+                    data = await self.client.kv_get(self.bucket_name, key, parse_json=False)
                     if data:
                         json_str = data.decode() if isinstance(data, bytes) else data
                         pattern_entry = PatternEntry.from_json(json_str)
@@ -290,8 +289,7 @@ class PatternManager:
         self._patterns[key] = compiled
 
         self.logger.info(
-            f"Added pattern: '{pattern}' (regex={is_regex}, action={action}) "
-            f"for {self.channel}"
+            f"Added pattern: '{pattern}' (regex={is_regex}, action={action}) " f"for {self.channel}"
         )
         return entry
 
