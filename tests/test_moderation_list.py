@@ -121,6 +121,7 @@ class TestModerationList:
         client.kv_get = AsyncMock(return_value=None)
         client.kv_put = AsyncMock()
         client.kv_delete = AsyncMock()
+        client.get_or_create_kv_bucket = AsyncMock(return_value=AsyncMock())
         return client
 
     @pytest.mark.asyncio
@@ -238,6 +239,7 @@ class TestModerationListManager:
         client.kv_get = AsyncMock(return_value=None)
         client.kv_put = AsyncMock()
         client.kv_delete = AsyncMock()
+        client.get_or_create_kv_bucket = AsyncMock(return_value=AsyncMock())
         return client
 
     @pytest.mark.asyncio
