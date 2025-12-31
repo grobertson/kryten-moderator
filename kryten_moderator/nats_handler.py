@@ -126,7 +126,6 @@ class ModeratorCommandHandler:
 
     async def _handle_system_ping(self, request: dict) -> dict:
         """Handle system.ping query - Simple liveness check with metadata."""
-        import time
         from datetime import datetime
 
         from . import __version__

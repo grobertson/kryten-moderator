@@ -1,7 +1,8 @@
 """Unit tests for the ip_manager module."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from kryten_moderator.ip_manager import (
     IPManager,
@@ -47,7 +48,7 @@ class TestIPManager:
         """Test initializing an empty IP manager."""
         manager = IPManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()
-        
+
         assert manager._initialized is True
         assert manager.size == 0
 
@@ -56,9 +57,9 @@ class TestIPManager:
         """Test adding an IP mapping."""
         manager = IPManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()
-        
+
         await manager.add_ip("192.168.1.1", "testuser")
-        
+
         assert manager.size == 1
         usernames = manager.get_usernames_for_ip("192.168.1.1")
         assert "testuser" in usernames
@@ -69,10 +70,10 @@ class TestIPManager:
         """Test adding multiple users to same IP."""
         manager = IPManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()
-        
+
         await manager.add_ip("192.168.1.1", "user1")
         await manager.add_ip("192.168.1.1", "user2")
-        
+
         usernames = manager.get_usernames_for_ip("192.168.1.1")
         assert len(usernames) == 2
         assert "user1" in usernames
@@ -83,10 +84,10 @@ class TestIPManager:
         """Test that duplicate user-IP pairs are not added twice."""
         manager = IPManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()
-        
+
         await manager.add_ip("192.168.1.1", "sameuser")
         await manager.add_ip("192.168.1.1", "sameuser")
-        
+
         usernames = manager.get_usernames_for_ip("192.168.1.1")
         assert len(usernames) == 1
 
@@ -95,10 +96,10 @@ class TestIPManager:
         """Test that empty/None IP is ignored."""
         manager = IPManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()
-        
+
         await manager.add_ip("", "testuser")
         await manager.add_ip(None, "testuser")
-        
+
         assert manager.size == 0
 
     @pytest.mark.asyncio
@@ -106,12 +107,12 @@ class TestIPManager:
         """Test removing an IP mapping."""
         manager = IPManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()
-        
+
         await manager.add_ip("192.168.1.1", "user1")
         await manager.add_ip("192.168.1.1", "user2")
-        
+
         await manager.remove_ip("192.168.1.1", "user1")
-        
+
         usernames = manager.get_usernames_for_ip("192.168.1.1")
         assert len(usernames) == 1
         assert "user2" in usernames
@@ -121,10 +122,10 @@ class TestIPManager:
         """Test IP correlation detection when match found."""
         manager = IPManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()
-        
+
         # Add a known bad user
         await manager.add_ip("192.168.1.1", "baduser")
-        
+
         # Set up moderation list to return an entry for baduser
         entry = ModerationEntry(
             username="baduser",
@@ -137,14 +138,14 @@ class TestIPManager:
         mock_moderation_list.check_username = MagicMock(
             side_effect=lambda u: entry if u == "baduser" else None
         )
-        
+
         # Check if new user with same IP correlates
         result = manager.check_ip_correlation(
             "192.168.1.1",
             mock_moderation_list,
             exclude_username="newuser",
         )
-        
+
         assert result is not None
         source_username, source_entry = result
         assert source_username == "baduser"
@@ -155,9 +156,9 @@ class TestIPManager:
         """Test that IP correlation excludes the user themselves."""
         manager = IPManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()
-        
+
         await manager.add_ip("192.168.1.1", "sameuser")
-        
+
         entry = ModerationEntry(
             username="sameuser",
             action="smute",
@@ -167,14 +168,14 @@ class TestIPManager:
             ips=["192.168.1.1"],
         )
         mock_moderation_list.check_username = MagicMock(return_value=entry)
-        
+
         # Should not match self
         result = manager.check_ip_correlation(
             "192.168.1.1",
             mock_moderation_list,
             exclude_username="sameuser",
         )
-        
+
         assert result is None
 
     @pytest.mark.asyncio
@@ -182,17 +183,17 @@ class TestIPManager:
         """Test IP correlation when no match found."""
         manager = IPManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()
-        
+
         await manager.add_ip("192.168.1.1", "gooduser")
-        
+
         # gooduser is not moderated
         mock_moderation_list.check_username = MagicMock(return_value=None)
-        
+
         result = manager.check_ip_correlation(
             "192.168.1.1",
             mock_moderation_list,
         )
-        
+
         assert result is None
 
     def test_mask_ip(self):
@@ -210,26 +211,26 @@ class TestExtractIpFromEvent:
         """Test extracting full IP from event."""
         event = MagicMock()
         event.raw = {"meta": {"ip": "192.168.1.1"}}
-        
+
         full, masked = extract_ip_from_event(event)
-        
+
         assert full == "192.168.1.1"
 
     def test_extract_masked_ip(self):
         """Test extracting masked IP from event."""
         event = MagicMock()
         event.raw = {"meta": {"ip_masked": "192.168.x.x"}}
-        
+
         full, masked = extract_ip_from_event(event)
-        
+
         assert masked == "192.168.x.x"
 
     def test_extract_no_raw(self):
         """Test extraction when no raw data available."""
         event = MagicMock(spec=[])  # No raw attribute
-        
+
         full, masked = extract_ip_from_event(event)
-        
+
         assert full is None
         assert masked is None
 
@@ -237,9 +238,9 @@ class TestExtractIpFromEvent:
         """Test extracting IP from aliases fallback."""
         event = MagicMock()
         event.raw = {"meta": {"aliases": ["192.168.1.x"]}}
-        
+
         full, masked = extract_ip_from_event(event)
-        
+
         assert masked == "192.168.1.x"
 
 
@@ -261,9 +262,9 @@ class TestIPManagerRegistry:
     async def test_get_manager(self, mock_client):
         """Test getting an IP manager for a channel."""
         registry = IPManagerRegistry(mock_client)
-        
+
         manager = await registry.get_manager("cytu.be", "lounge")
-        
+
         assert manager is not None
         assert manager.domain == "cytu.be"
         assert manager.channel == "lounge"
@@ -272,12 +273,12 @@ class TestIPManagerRegistry:
     async def test_initialize_all(self, mock_client):
         """Test initializing all channels."""
         registry = IPManagerRegistry(mock_client)
-        
+
         channels = [
             {"domain": "cytu.be", "channel": "lounge"},
             {"domain": "cytu.be", "channel": "movies"},
         ]
-        
+
         await registry.initialize_all(channels)
-        
+
         assert registry.manager_count == 2
