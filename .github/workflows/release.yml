@@ -13,6 +13,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      tag_created: ${{ steps.check_tag.outputs.exists == 'false' && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,9 +49,9 @@ jobs:
 
       - name: Extract changelog entry
         id: changelog
+        if: steps.check_tag.outputs.exists == 'false'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          # Extract the section for this version: from its heading to the next heading
           BODY=$(awk "/^## \[$VERSION\]/{flag=1; next} /^## \[/{if(flag) exit} flag{print}" CHANGELOG.md)
           echo "body<<EOF" >> $GITHUB_OUTPUT
           echo "$BODY" >> $GITHUB_OUTPUT
@@ -62,3 +64,37 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Release ${{ steps.version.outputs.tag }}
           body: ${{ steps.changelog.outputs.body }}
+
+  pypi-publish:
+    name: Publish to PyPI
+    needs: release
+    if: needs.release.outputs.tag_created == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Build release distributions
+        run: |
+          uv build
+          echo "📦 Built packages:"
+          ls -lh dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+          print-hash: true
+
+      - name: Success notification
+        run: echo "✅ Package published to PyPI!"
