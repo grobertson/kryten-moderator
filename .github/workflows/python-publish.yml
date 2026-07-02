@@ -10,6 +10,7 @@ on:
     tags:
       - 'kryten-moderator-v*'
       - 'v*'
+  workflow_call: {}  # Allow being called from release.yml
 
 permissions:
   contents: read

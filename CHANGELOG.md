@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4] - 2026-07-02
+
+### Fixed
+
+- **CI**: Use `workflow_call` to invoke `python-publish.yml` from `release.yml`
+  so the OIDC `job_workflow_ref` claim matches the PyPI trusted publisher
+  (which was configured for `python-publish.yml`, not `release.yml`)
+
 ## [0.6.3] - 2026-07-01
 
 ### Fixed
