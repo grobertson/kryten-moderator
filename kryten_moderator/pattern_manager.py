@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Literal
 
-from kryten import KrytenClient
+from kryten import KrytenClient, kv_delete, kv_get, kv_keys, kv_put
 
 # Action types for moderation
 ActionType = Literal["ban", "smute", "mute"]
@@ -176,16 +176,16 @@ class PatternManager:
 
         try:
             # Get or create the bucket - moderator owns this bucket
-            self._kv = await self.client.get_or_create_kv_bucket(
+            self._kv = await self.client.get_or_create_kv_store(
                 self.bucket_name,
                 description=f"Kryten moderator patterns for {self.domain}/{self.channel}",
             )
 
-            keys = await self.client.kv_keys(self.bucket_name)
+            keys = await kv_keys(self._kv)
 
             for key in keys:
                 try:
-                    data = await self.client.kv_get(self.bucket_name, key, parse_json=False)
+                    data = await kv_get(self._kv, key, parse_json=False)
                     if data:
                         json_str = data.decode() if isinstance(data, bytes) else data
                         pattern_entry = PatternEntry.from_json(json_str)
@@ -278,12 +278,7 @@ class PatternManager:
 
         # Store in KV
         key = self._make_key(pattern)
-        await self.client.kv_put(
-            self.bucket_name,
-            key,
-            entry.to_json(),
-            as_json=False,
-        )
+        await kv_put(self._kv, key, entry.to_json())
 
         # Update cache
         self._patterns[key] = compiled
@@ -307,7 +302,7 @@ class PatternManager:
         if key not in self._patterns:
             return False
 
-        await self.client.kv_delete(self.bucket_name, key)
+        await kv_delete(self._kv, key)
         del self._patterns[key]
 
         self.logger.info(f"Removed pattern: '{pattern}' from {self.channel}")

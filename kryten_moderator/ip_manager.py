@@ -7,7 +7,7 @@ mappings and detecting when new accounts share IPs with moderated users.
 import logging
 from typing import TYPE_CHECKING
 
-from kryten import KrytenClient
+from kryten import KrytenClient, kv_delete, kv_get, kv_keys, kv_put
 
 if TYPE_CHECKING:
     from .moderation_list import ModerationEntry, ModerationList
@@ -61,16 +61,16 @@ class IPManager:
 
         try:
             # Get or create the bucket - moderator owns this bucket
-            self._kv = await self.client.get_or_create_kv_bucket(
+            self._kv = await self.client.get_or_create_kv_store(
                 self.bucket_name,
                 description=f"Kryten moderator IP mappings for {self.domain}/{self.channel}",
             )
 
-            keys = await self.client.kv_keys(self.bucket_name)
+            keys = await kv_keys(self._kv)
 
             for key in keys:
                 try:
-                    data = await self.client.kv_get(self.bucket_name, key, parse_json=True)
+                    data = await kv_get(self._kv, key, parse_json=True)
                     if data and isinstance(data, list):
                         self._cache[key] = data
                 except Exception as e:
@@ -107,12 +107,7 @@ class IPManager:
             usernames.append(username_lower)
 
             # Store in KV
-            await self.client.kv_put(
-                self.bucket_name,
-                key,
-                usernames,
-                as_json=True,
-            )
+            await kv_put(self._kv, key, usernames, as_json=True)
 
             # Update cache
             self._cache[key] = usernames
@@ -138,14 +133,9 @@ class IPManager:
             usernames.remove(username_lower)
 
             if usernames:
-                await self.client.kv_put(
-                    self.bucket_name,
-                    key,
-                    usernames,
-                    as_json=True,
-                )
+                await kv_put(self._kv, key, usernames, as_json=True)
             else:
-                await self.client.kv_delete(self.bucket_name, key)
+                await kv_delete(self._kv, key)
 
             self._cache[key] = usernames
 

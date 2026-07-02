@@ -231,18 +231,6 @@ class ModeratorService:
             # Track user
             self._users_tracked.add(event.username.lower())
 
-            # TODO: Add moderation checks here:
-            # - Spam detection
-            # - Banned word filtering
-            # - Excessive caps detection
-            # - URL filtering
-            # - Rate limiting
-
-            # Placeholder for future moderation logic
-            # if self._check_spam(event):
-            #     self._messages_flagged += 1
-            #     await self._take_action(event, "spam")
-
         except Exception as e:
             self.logger.error(f"Error handling chat message: {e}", exc_info=True)
 
@@ -482,10 +470,6 @@ class ModeratorService:
 
         try:
             self.logger.debug(f"User left: {event.username} from {event.channel}")
-
-            # TODO: Add leave tracking:
-            # - Log session duration
-            # - Track leave patterns
 
         except Exception as e:
             self.logger.error(f"Error handling user leave: {e}", exc_info=True)

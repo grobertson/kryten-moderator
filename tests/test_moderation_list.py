@@ -116,28 +116,34 @@ class TestModerationList:
     """Tests for ModerationList class."""
 
     @pytest.fixture
-    def mock_client(self):
+    def mock_kv(self):
+        """Create a mock KV store."""
+        kv = MagicMock()
+        kv.keys = AsyncMock(return_value=[])
+        kv.get = AsyncMock(return_value=None)
+        kv.put = AsyncMock()
+        kv.delete = AsyncMock()
+        return kv
+
+    @pytest.fixture
+    def mock_client(self, mock_kv):
         """Create a mock KrytenClient."""
         client = MagicMock()
-        client.kv_keys = AsyncMock(return_value=[])
-        client.kv_get = AsyncMock(return_value=None)
-        client.kv_put = AsyncMock()
-        client.kv_delete = AsyncMock()
-        client.get_or_create_kv_bucket = AsyncMock(return_value=AsyncMock())
+        client.get_or_create_kv_store = AsyncMock(return_value=mock_kv)
         return client
 
     @pytest.mark.asyncio
-    async def test_initialize_empty(self, mock_client):
+    async def test_initialize_empty(self, mock_client, mock_kv):
         """Test initializing an empty moderation list."""
         mod_list = ModerationList(mock_client, "cytu.be", "lounge")
         await mod_list.initialize()
 
         assert mod_list._initialized is True
         assert mod_list.size == 0
-        mock_client.kv_keys.assert_called_once()
+        mock_kv.keys.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_add_entry(self, mock_client):
+    async def test_add_entry(self, mock_client, mock_kv):
         """Test adding a moderation entry."""
         mod_list = ModerationList(mock_client, "cytu.be", "lounge")
         await mod_list.initialize()
@@ -152,7 +158,7 @@ class TestModerationList:
         assert entry.username == "BadUser"
         assert entry.action == "smute"
         assert mod_list.size == 1
-        mock_client.kv_put.assert_called()
+        mock_kv.put.assert_called()
 
     @pytest.mark.asyncio
     async def test_check_username_found(self, mock_client):
@@ -180,7 +186,7 @@ class TestModerationList:
         assert entry is None
 
     @pytest.mark.asyncio
-    async def test_remove_entry(self, mock_client):
+    async def test_remove_entry(self, mock_client, mock_kv):
         """Test removing a moderation entry."""
         mod_list = ModerationList(mock_client, "cytu.be", "lounge")
         await mod_list.initialize()
@@ -191,7 +197,7 @@ class TestModerationList:
         removed = await mod_list.remove("removeme")
         assert removed is True
         assert mod_list.size == 0
-        mock_client.kv_delete.assert_called()
+        mock_kv.delete.assert_called()
 
     @pytest.mark.asyncio
     async def test_remove_nonexistent(self, mock_client):
@@ -234,14 +240,20 @@ class TestModerationListManager:
     """Tests for ModerationListManager class."""
 
     @pytest.fixture
-    def mock_client(self):
+    def mock_kv(self):
+        """Create a mock KV store."""
+        kv = MagicMock()
+        kv.keys = AsyncMock(return_value=[])
+        kv.get = AsyncMock(return_value=None)
+        kv.put = AsyncMock()
+        kv.delete = AsyncMock()
+        return kv
+
+    @pytest.fixture
+    def mock_client(self, mock_kv):
         """Create a mock KrytenClient."""
         client = MagicMock()
-        client.kv_keys = AsyncMock(return_value=[])
-        client.kv_get = AsyncMock(return_value=None)
-        client.kv_put = AsyncMock()
-        client.kv_delete = AsyncMock()
-        client.get_or_create_kv_bucket = AsyncMock(return_value=AsyncMock())
+        client.get_or_create_kv_store = AsyncMock(return_value=mock_kv)
         return client
 
     @pytest.mark.asyncio

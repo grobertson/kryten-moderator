@@ -375,7 +375,7 @@ wheels = [
 
 [[package]]
 name = "kryten-moderator"
-version = "0.3.3"
+version = "0.6.1"
 source = { editable = "." }
 dependencies = [
     { name = "kryten-py" },
@@ -392,7 +392,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "kryten-py", specifier = ">=0.9.11" }]
+requires-dist = [{ name = "kryten-py", specifier = ">=0.13.1" }]
 
 [package.metadata.requires-dev]
 dev = [
@@ -406,7 +406,7 @@ dev = [
 
 [[package]]
 name = "kryten-py"
-version = "0.10.5"
+version = "0.16.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -414,9 +414,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f4/69/06a126189c1c4b62010b3fef831cb5f4840e2e15de8ebe7659d92b8843d1/kryten_py-0.10.5.tar.gz", hash = "sha256:67ed4f83a67ef3067c93e7080c256a714e2a10193140c348558e191bdd7a4d9e", size = 51734, upload-time = "2025-12-29T06:40:04.259Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7c/1b/b88bd70805105145f50860efb8a868d3d64b25309e1a118b97e824ad95eb/kryten_py-0.16.1.tar.gz", hash = "sha256:741f696a4e719ccf05e4008599158be7676c3fbed6fcf223e82ddbdc736dcc28", size = 213061, upload-time = "2026-05-30T22:56:18.927Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/90/2b/4f5ec6c5bee1657ae66b6638dbe4203200801b4af85a67c4284b4456b483/kryten_py-0.10.5-py3-none-any.whl", hash = "sha256:18b5ffca5f1c803c771aba628c7d5e4f6121fc971415224580b1e38be981be30", size = 51390, upload-time = "2025-12-29T06:40:02.571Z" },
+    { url = "https://files.pythonhosted.org/packages/65/a7/853727383f56db34a8b692065efa84a90edaf6f2025e53fea0b02fad2acf/kryten_py-0.16.1-py3-none-any.whl", hash = "sha256:7377705b97cfe86d4b1d280f97ecd53d71a48680f2d4a69d9a98ae075c0eff70", size = 53228, upload-time = "2026-05-30T22:56:17.698Z" },
 ]
 
 [[package]]

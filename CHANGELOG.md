@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-07-01
+
+### Changed
+
+- **kryten-py dependency**: Bumped minimum requirement from `>=0.9.11` to `>=0.13.1`
+
+- **KV store API modernization**: Updated all three KV-backed managers to use the
+  current kryten-py patterns
+  - `ip_manager.py`, `moderation_list.py`, `pattern_manager.py` now call
+    `client.get_or_create_kv_store()` (canonical name) instead of the deprecated
+    `client.get_or_create_kv_bucket()` alias
+  - KV read/write operations (`kv_get`, `kv_put`, `kv_delete`, `kv_keys`) now call
+    the module-level helper functions directly with the stored `self._kv` handle
+    rather than routing through client-level wrappers that re-fetched the bucket
+    on every call
+
+### Fixed
+
+- **Tests**: Updated all mock fixtures to reflect the new KV API — `mock_kv` now
+  provides `.keys`, `.get`, `.put`, `.delete` async mocks directly on the KV store
+  object; `mock_client.get_or_create_kv_store` returns this mock rather than the
+  old per-operation `client.kv_*` stubs
+
+### Removed
+
+- Dead code: removed commented-out future-moderation stubs and `TODO` comment
+  blocks from `_handle_chat_message` and `_handle_user_leave`; these handlers
+  are functional and upcoming features are tracked in the phase specs
+
 ## [0.4.0] - 2025-12-31
 
 ### Changed

@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Literal
 
-from kryten import KrytenClient
+from kryten import KrytenClient, kv_delete, kv_get, kv_keys, kv_put
 
 # Action types for moderation
 ActionType = Literal["ban", "smute", "mute"]
@@ -105,16 +105,16 @@ class ModerationList:
 
         try:
             # Get or create the bucket - moderator owns this bucket
-            self._kv = await self.client.get_or_create_kv_bucket(
+            self._kv = await self.client.get_or_create_kv_store(
                 self.bucket_name,
                 description=f"Kryten moderator entries for {self.domain}/{self.channel}",
             )
 
             # Load all entries into cache
-            keys = await self.client.kv_keys(self.bucket_name)
+            keys = await kv_keys(self._kv)
             for key in keys:
                 try:
-                    data = await self.client.kv_get(self.bucket_name, key, parse_json=False)
+                    data = await kv_get(self._kv, key, parse_json=False)
                     if data:
                         # kv_get returns bytes when parse_json=False
                         json_str = data.decode() if isinstance(data, bytes) else data
@@ -170,12 +170,7 @@ class ModerationList:
         )
 
         # Store in KV
-        await self.client.kv_put(
-            self.bucket_name,
-            key,
-            entry.to_json(),
-            as_json=False,  # Already JSON string
-        )
+        await kv_put(self._kv, key, entry.to_json())
 
         # Update cache
         self._cache[key] = entry
@@ -201,7 +196,7 @@ class ModerationList:
             return False
 
         # Delete from KV
-        await self.client.kv_delete(self.bucket_name, key)
+        await kv_delete(self._kv, key)
 
         # Update cache
         del self._cache[key]
@@ -276,12 +271,7 @@ class ModerationList:
             entry.ips.append(ip)
 
             # Persist update
-            await self.client.kv_put(
-                self.bucket_name,
-                key,
-                entry.to_json(),
-                as_json=False,
-            )
+            await kv_put(self._kv, key, entry.to_json())
 
             self.logger.debug(f"Added IP {ip} to entry for {username}")
 

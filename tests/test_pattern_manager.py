@@ -120,14 +120,20 @@ class TestPatternManager:
     """Tests for PatternManager class."""
 
     @pytest.fixture
-    def mock_client(self):
+    def mock_kv(self):
+        """Create a mock KV store."""
+        kv = MagicMock()
+        kv.keys = AsyncMock(return_value=[])
+        kv.get = AsyncMock(return_value=None)
+        kv.put = AsyncMock()
+        kv.delete = AsyncMock()
+        return kv
+
+    @pytest.fixture
+    def mock_client(self, mock_kv):
         """Create a mock KrytenClient."""
         client = MagicMock()
-        client.kv_keys = AsyncMock(return_value=[])
-        client.kv_get = AsyncMock(return_value=None)
-        client.kv_put = AsyncMock()
-        client.kv_delete = AsyncMock()
-        client.get_or_create_kv_bucket = AsyncMock(return_value=AsyncMock())
+        client.get_or_create_kv_store = AsyncMock(return_value=mock_kv)
         return client
 
     @pytest.mark.asyncio
@@ -140,7 +146,7 @@ class TestPatternManager:
         assert manager.count == 0
 
     @pytest.mark.asyncio
-    async def test_add_pattern(self, mock_client):
+    async def test_add_pattern(self, mock_client, mock_kv):
         """Test adding a pattern."""
         manager = PatternManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()
@@ -154,7 +160,7 @@ class TestPatternManager:
 
         assert entry.pattern == "badword"
         assert manager.count == 1
-        mock_client.kv_put.assert_called()
+        mock_kv.put.assert_called()
 
     @pytest.mark.asyncio
     async def test_check_username_match(self, mock_client):
@@ -224,14 +230,20 @@ class TestPatternManagerRegistry:
     """Tests for PatternManagerRegistry class."""
 
     @pytest.fixture
-    def mock_client(self):
+    def mock_kv(self):
+        """Create a mock KV store."""
+        kv = MagicMock()
+        kv.keys = AsyncMock(return_value=[])
+        kv.get = AsyncMock(return_value=None)
+        kv.put = AsyncMock()
+        kv.delete = AsyncMock()
+        return kv
+
+    @pytest.fixture
+    def mock_client(self, mock_kv):
         """Create a mock KrytenClient."""
         client = MagicMock()
-        client.kv_keys = AsyncMock(return_value=[])
-        client.kv_get = AsyncMock(return_value=None)
-        client.kv_put = AsyncMock()
-        client.kv_delete = AsyncMock()
-        client.get_or_create_kv_bucket = AsyncMock(return_value=AsyncMock())
+        client.get_or_create_kv_store = AsyncMock(return_value=mock_kv)
         return client
 
     @pytest.mark.asyncio
