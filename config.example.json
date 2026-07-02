@@ -1,6 +1,7 @@
 {
   "service": {
     "name": "moderator",
+    "bot_username": "Kryten",
     "enable_lifecycle": true,
     "enable_heartbeat": true,
     "heartbeat_interval": 30,
