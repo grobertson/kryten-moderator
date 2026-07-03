@@ -99,6 +99,39 @@ class PMCommandHandler:
     # Internal dispatch
     # ------------------------------------------------------------------
 
+    async def _get_sender_rank(self, event: ChatMessageEvent) -> int:
+        """Return the sender's current rank in the channel.
+
+        CyTube PM event payloads do not carry the sender's rank, so
+        ``event.rank`` is always 0 for incoming PMs.  We query
+        Kryten-Robot's live channel state for the real value.
+
+        Returns 0 (guest) if the lookup fails, which is the safest
+        default — it causes the rank check to refuse the command rather
+        than accidentally grant access.
+        """
+        try:
+            user_data = await self.client.get_user(
+                event.channel, event.username, domain=event.domain
+            )
+            if user_data and "rank" in user_data:
+                return int(user_data["rank"])
+            self.logger.warning(
+                "Rank lookup for %s in %s/%s returned no data",
+                event.username,
+                event.domain,
+                event.channel,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning(
+                "Could not look up rank for %s in %s/%s: %s",
+                event.username,
+                event.domain,
+                event.channel,
+                exc,
+            )
+        return 0
+
     async def _handle_pm(self, event: ChatMessageEvent) -> None:
         """Entry point for every incoming PM event."""
         self.app._events_processed += 1
@@ -108,12 +141,15 @@ class PMCommandHandler:
         if bot_username and event.username.lower() == bot_username.lower():
             return
 
+        # Look up the sender's actual rank — PM payloads always carry rank=0
+        rank = await self._get_sender_rank(event)
+
         # Enforce minimum rank
-        if event.rank < RANK_MOD:
+        if rank < RANK_MOD:
             await self._reply(
                 event,
                 f"PM commands require moderator rank ({RANK_MOD}+). "
-                f"Your rank: {event.rank}.",
+                f"Your rank: {rank}.",
             )
             return
 
@@ -128,7 +164,7 @@ class PMCommandHandler:
         self.logger.info(
             "PM command from %s (rank %d) in %s/%s: %r",
             event.username,
-            event.rank,
+            rank,
             event.domain,
             event.channel,
             command,
@@ -136,7 +172,7 @@ class PMCommandHandler:
         self.app._commands_processed += 1
 
         try:
-            await self._dispatch(event, command, args_str)
+            await self._dispatch(event, command, args_str, rank=rank)
         except Exception as exc:  # noqa: BLE001
             self.logger.error(
                 "Error handling PM command %r from %s: %s",
@@ -148,7 +184,7 @@ class PMCommandHandler:
             await self._reply(event, f"Error: {exc}")
 
     async def _dispatch(
-        self, event: ChatMessageEvent, command: str, args_str: str
+        self, event: ChatMessageEvent, command: str, args_str: str, *, rank: int
     ) -> None:
         """Route *command* to the correct handler."""
         mod_commands: dict[str, Any] = {
@@ -171,11 +207,11 @@ class PMCommandHandler:
         if command in mod_commands:
             await mod_commands[command](event, args_str)
         elif command in admin_commands:
-            if event.rank < RANK_ADMIN:
+            if rank < RANK_ADMIN:
                 await self._reply(
                     event,
                     f"Command {b(command)!r} requires admin rank ({RANK_ADMIN}+). "
-                    f"Your rank: {event.rank}.",
+                    f"Your rank: {rank}.",
                 )
             else:
                 await admin_commands[command](event, args_str)
@@ -380,6 +416,9 @@ class PMCommandHandler:
 
     async def _cmd_help(self, event: ChatMessageEvent, args_str: str) -> None:  # noqa: ARG002
         """Show the command reference."""
+        # Re-fetch rank so help shows the correct admin section without
+        # threading it through every call site.
+        rank = await self._get_sender_rank(event)
         lines = [
             f"{b('Kryten Moderator')}  — command reference",
             f"  {b('ban')} <user> [reason]        Ban user (kicked on join)",
@@ -394,7 +433,7 @@ class PMCommandHandler:
             f"  {b('about')}                      Version and statistics",
             f"  {b('help')}                       This message",
         ]
-        if event.rank >= RANK_ADMIN:
+        if rank >= RANK_ADMIN:
             lines += [
                 f"  {b('pattern list')}               List banned patterns",
                 f"  {b('pattern add')} <p> [regex] [action] [desc]",

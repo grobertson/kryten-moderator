@@ -14,15 +14,17 @@ from kryten_moderator.pm_handler import RANK_ADMIN, RANK_MOD, PMCommandHandler, 
 
 def _make_event(
     username: str = "ModUser",
-    rank: int = RANK_MOD,
     message: str = "help",
     channel: str = "lounge",
     domain: str = "cytu.be",
 ):
-    """Return a minimal mock ChatMessageEvent."""
+    """Return a minimal mock ChatMessageEvent.
+
+    Note: rank is intentionally absent — PM events always carry rank=0 from
+    CyTube.  Tests that care about rank should configure client.get_user instead.
+    """
     ev = MagicMock()
     ev.username = username
-    ev.rank = rank
     ev.message = message
     ev.channel = channel
     ev.domain = domain
@@ -67,13 +69,15 @@ def _make_app(
     return app
 
 
-def _make_handler(app=None, bot_username="Kryten"):
+def _make_handler(app=None, bot_username="Kryten", rank=RANK_MOD):
     client = MagicMock()
     client.send_pm = AsyncMock()
     client.kick_user = AsyncMock()
     client.mute_user = AsyncMock()
     client.shadow_mute_user = AsyncMock()
     client.unmute_user = AsyncMock()
+    # Simulate Kryten-Robot returning the given rank for any user lookup
+    client.get_user = AsyncMock(return_value={"rank": rank, "name": "ModUser"})
 
     if app is None:
         app = _make_app(bot_username=bot_username)
@@ -103,8 +107,8 @@ class TestFormatting:
 class TestRankGating:
     @pytest.mark.asyncio
     async def test_rank_below_mod_gets_refused(self):
-        handler = _make_handler()
-        event = _make_event(rank=1, message="ban someone")
+        handler = _make_handler(rank=1)
+        event = _make_event(message="ban someone")
         await handler._handle_pm(event)
         handler.client.send_pm.assert_awaited_once()
         msg = handler.client.send_pm.call_args[0][2]
@@ -112,15 +116,15 @@ class TestRankGating:
 
     @pytest.mark.asyncio
     async def test_rank_mod_can_send_commands(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="help")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="help")
         await handler._handle_pm(event)
         handler.client.send_pm.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_admin_command_rejected_for_mod_rank(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="pattern list")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="pattern list")
         await handler._handle_pm(event)
         handler.client.send_pm.assert_awaited()
         msg = handler.client.send_pm.call_args[0][2]
@@ -128,13 +132,33 @@ class TestRankGating:
 
     @pytest.mark.asyncio
     async def test_admin_command_allowed_for_admin_rank(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_ADMIN, message="pattern list")
+        handler = _make_handler(rank=RANK_ADMIN)
+        event = _make_event(message="pattern list")
         await handler._handle_pm(event)
         handler.client.send_pm.assert_awaited()
         # Should NOT get a rank refusal
         msg = handler.client.send_pm.call_args[0][2]
         assert "admin rank" not in msg.lower()
+
+    @pytest.mark.asyncio
+    async def test_rank_lookup_failure_refuses_command(self):
+        """If Kryten-Robot is unreachable, rank defaults to 0 and command is refused."""
+        handler = _make_handler(rank=RANK_MOD)
+        handler.client.get_user = AsyncMock(side_effect=Exception("NATS timeout"))
+        event = _make_event(message="help")
+        await handler._handle_pm(event)
+        msg = handler.client.send_pm.call_args[0][2]
+        assert "rank" in msg.lower()
+
+    @pytest.mark.asyncio
+    async def test_rank_lookup_returns_none_refuses_command(self):
+        """If get_user returns None (user not found), command is refused."""
+        handler = _make_handler(rank=RANK_MOD)
+        handler.client.get_user = AsyncMock(return_value=None)
+        event = _make_event(message="help")
+        await handler._handle_pm(event)
+        msg = handler.client.send_pm.call_args[0][2]
+        assert "rank" in msg.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -146,21 +170,21 @@ class TestSelfPMFilter:
     @pytest.mark.asyncio
     async def test_ignores_own_username(self):
         handler = _make_handler(bot_username="Kryten")
-        event = _make_event(username="Kryten", rank=RANK_MOD, message="help")
+        event = _make_event(username="Kryten", message="help")
         await handler._handle_pm(event)
         handler.client.send_pm.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_ignores_own_username_case_insensitive(self):
         handler = _make_handler(bot_username="Kryten")
-        event = _make_event(username="kryten", rank=RANK_MOD, message="help")
+        event = _make_event(username="kryten", message="help")
         await handler._handle_pm(event)
         handler.client.send_pm.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_other_user_not_filtered(self):
         handler = _make_handler(bot_username="Kryten")
-        event = _make_event(username="SomeOtherUser", rank=RANK_MOD, message="help")
+        event = _make_event(username="SomeOtherUser", message="help")
         await handler._handle_pm(event)
         handler.client.send_pm.assert_awaited()
 
@@ -173,8 +197,8 @@ class TestSelfPMFilter:
 class TestHelpCommand:
     @pytest.mark.asyncio
     async def test_help_shows_commands(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="help")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="help")
         await handler._handle_pm(event)
         calls = [c[0][2] for c in handler.client.send_pm.call_args_list]
         combined = "\n".join(calls)
@@ -184,8 +208,8 @@ class TestHelpCommand:
 
     @pytest.mark.asyncio
     async def test_help_shows_admin_section_for_admin(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_ADMIN, message="help")
+        handler = _make_handler(rank=RANK_ADMIN)
+        event = _make_event(message="help")
         await handler._handle_pm(event)
         calls = [c[0][2] for c in handler.client.send_pm.call_args_list]
         combined = "\n".join(calls)
@@ -193,8 +217,8 @@ class TestHelpCommand:
 
     @pytest.mark.asyncio
     async def test_help_hides_admin_section_for_mod(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="help")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="help")
         await handler._handle_pm(event)
         calls = [c[0][2] for c in handler.client.send_pm.call_args_list]
         combined = "\n".join(calls)
@@ -209,11 +233,9 @@ class TestHelpCommand:
 class TestAboutCommand:
     @pytest.mark.asyncio
     async def test_about_shows_version_and_uptime(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="about")
-        with patch("kryten_moderator.pm_handler.PMCommandHandler._cmd_about",
-                   wraps=handler._cmd_about):
-            await handler._handle_pm(event)
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="about")
+        await handler._handle_pm(event)
         calls = [c[0][2] for c in handler.client.send_pm.call_args_list]
         combined = "\n".join(calls)
         # uptime should show hours/minutes/seconds
@@ -224,8 +246,8 @@ class TestAboutCommand:
 
     @pytest.mark.asyncio
     async def test_about_shows_all_stat_fields(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="about")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="about")
         await handler._handle_pm(event)
         calls = [c[0][2] for c in handler.client.send_pm.call_args_list]
         combined = "\n".join(calls)
@@ -241,8 +263,8 @@ class TestAboutCommand:
 class TestBanCommands:
     @pytest.mark.asyncio
     async def test_ban_requires_username(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="ban")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="ban")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "usage" in msg.lower() or "Usage" in msg
@@ -254,9 +276,9 @@ class TestBanCommands:
         entry.action = "ban"
         entry.reason = "spam"
         app.moderation_lists.get_list.return_value.add = AsyncMock(return_value=entry)
-        handler = _make_handler(app=app)
+        handler = _make_handler(app=app, rank=RANK_MOD)
 
-        event = _make_event(rank=RANK_MOD, message="ban BadActor spam")
+        event = _make_event(message="ban BadActor spam")
         await handler._handle_pm(event)
 
         app.moderation_lists.get_list.return_value.add.assert_awaited_once()
@@ -274,9 +296,9 @@ class TestBanCommands:
     async def test_unban_when_user_not_in_list(self):
         app = _make_app()
         app.moderation_lists.get_list.return_value.remove = AsyncMock(return_value=False)
-        handler = _make_handler(app=app)
+        handler = _make_handler(app=app, rank=RANK_MOD)
 
-        event = _make_event(rank=RANK_MOD, message="unban nobody")
+        event = _make_event(message="unban nobody")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "not in" in msg.lower()
@@ -285,9 +307,9 @@ class TestBanCommands:
     async def test_unban_removes_user(self):
         app = _make_app()
         app.moderation_lists.get_list.return_value.remove = AsyncMock(return_value=True)
-        handler = _make_handler(app=app)
+        handler = _make_handler(app=app, rank=RANK_MOD)
 
-        event = _make_event(rank=RANK_MOD, message="unban GoodActor")
+        event = _make_event(message="unban GoodActor")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "Removed" in msg
@@ -311,9 +333,9 @@ class TestSmuteMuteCommands:
         entry.action = action
         entry.reason = "test"
         app.moderation_lists.get_list.return_value.add = AsyncMock(return_value=entry)
-        handler = _make_handler(app=app)
+        handler = _make_handler(app=app, rank=RANK_MOD)
 
-        event = _make_event(rank=RANK_MOD, message=cmd)
+        event = _make_event(message=cmd)
         await handler._handle_pm(event)
 
         call_kwargs = app.moderation_lists.get_list.return_value.add.call_args[1]
@@ -328,16 +350,16 @@ class TestSmuteMuteCommands:
 class TestListCommand:
     @pytest.mark.asyncio
     async def test_list_empty(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="list")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="list")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "No moderation" in msg
 
     @pytest.mark.asyncio
     async def test_list_invalid_filter(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="list kick")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="list kick")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "Invalid" in msg
@@ -352,9 +374,9 @@ class TestListCommand:
         app.moderation_lists.get_list.return_value.list_all = AsyncMock(
             return_value=[entry]
         )
-        handler = _make_handler(app=app)
+        handler = _make_handler(app=app, rank=RANK_MOD)
 
-        event = _make_event(rank=RANK_MOD, message="list")
+        event = _make_event(message="list")
         await handler._handle_pm(event)
         calls = [c[0][2] for c in handler.client.send_pm.call_args_list]
         combined = "\n".join(calls)
@@ -374,9 +396,9 @@ class TestListCommand:
             e.reason = None
             entries.append(e)
         app.moderation_lists.get_list.return_value.list_all = AsyncMock(return_value=entries)
-        handler = _make_handler(app=app)
+        handler = _make_handler(app=app, rank=RANK_MOD)
 
-        event = _make_event(rank=RANK_MOD, message="list")
+        event = _make_event(message="list")
         await handler._handle_pm(event)
 
         key = (event.username, event.channel, event.domain)
@@ -391,16 +413,16 @@ class TestListCommand:
 class TestMoreCommand:
     @pytest.mark.asyncio
     async def test_more_no_pending(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="more")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="more")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "No further" in msg
 
     @pytest.mark.asyncio
     async def test_more_shows_next_page(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="more")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="more")
         key = (event.username, event.channel, event.domain)
         handler._pending_pages[key] = [["line A", "line B"]]
 
@@ -421,8 +443,8 @@ class TestMoreCommand:
 class TestCheckCommand:
     @pytest.mark.asyncio
     async def test_check_not_found(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="check cleanuser")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="check cleanuser")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "not in" in msg.lower()
@@ -439,9 +461,9 @@ class TestCheckCommand:
         entry.ip_correlation_source = None
         entry.pattern_match = None
         app.moderation_lists.get_list.return_value.get = AsyncMock(return_value=entry)
-        handler = _make_handler(app=app)
+        handler = _make_handler(app=app, rank=RANK_MOD)
 
-        event = _make_event(rank=RANK_MOD, message="check BadActor")
+        event = _make_event(message="check BadActor")
         await handler._handle_pm(event)
         calls = [c[0][2] for c in handler.client.send_pm.call_args_list]
         combined = "\n".join(calls)
@@ -450,8 +472,8 @@ class TestCheckCommand:
 
     @pytest.mark.asyncio
     async def test_check_requires_username(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="check")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="check")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "Usage" in msg
@@ -465,8 +487,8 @@ class TestCheckCommand:
 class TestPatternCommands:
     @pytest.mark.asyncio
     async def test_pattern_list_empty(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_ADMIN, message="pattern list")
+        handler = _make_handler(rank=RANK_ADMIN)
+        event = _make_event(message="pattern list")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "No patterns" in msg
@@ -479,9 +501,9 @@ class TestPatternCommands:
         entry.is_regex = False
         entry.action = "ban"
         app.pattern_managers.get_manager.return_value.add = AsyncMock(return_value=entry)
-        handler = _make_handler(app=app)
+        handler = _make_handler(app=app, rank=RANK_ADMIN)
 
-        event = _make_event(rank=RANK_ADMIN, message="pattern add 1488")
+        event = _make_event(message="pattern add 1488")
         await handler._handle_pm(event)
 
         app.pattern_managers.get_manager.return_value.add.assert_awaited_once()
@@ -501,9 +523,9 @@ class TestPatternCommands:
         entry.is_regex = True
         entry.action = "ban"
         app.pattern_managers.get_manager.return_value.add = AsyncMock(return_value=entry)
-        handler = _make_handler(app=app)
+        handler = _make_handler(app=app, rank=RANK_ADMIN)
 
-        event = _make_event(rank=RANK_ADMIN, message="pattern add ^h.tl.r$ regex ban Nazi ref")
+        event = _make_event(message="pattern add ^h.tl.r$ regex ban Nazi ref")
         await handler._handle_pm(event)
 
         call_kwargs = app.pattern_managers.get_manager.return_value.add.call_args[1]
@@ -515,9 +537,9 @@ class TestPatternCommands:
     async def test_pattern_remove_not_found(self):
         app = _make_app()
         app.pattern_managers.get_manager.return_value.remove = AsyncMock(return_value=False)
-        handler = _make_handler(app=app)
+        handler = _make_handler(app=app, rank=RANK_ADMIN)
 
-        event = _make_event(rank=RANK_ADMIN, message="pattern remove nonexistent")
+        event = _make_event(message="pattern remove nonexistent")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "not found" in msg.lower()
@@ -526,17 +548,17 @@ class TestPatternCommands:
     async def test_pattern_remove_success(self):
         app = _make_app()
         app.pattern_managers.get_manager.return_value.remove = AsyncMock(return_value=True)
-        handler = _make_handler(app=app)
+        handler = _make_handler(app=app, rank=RANK_ADMIN)
 
-        event = _make_event(rank=RANK_ADMIN, message="pattern remove 1488")
+        event = _make_event(message="pattern remove 1488")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "removed" in msg.lower()
 
     @pytest.mark.asyncio
     async def test_pattern_unknown_sub(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_ADMIN, message="pattern purge")
+        handler = _make_handler(rank=RANK_ADMIN)
+        event = _make_event(message="pattern purge")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "Unknown sub-command" in msg
@@ -550,8 +572,8 @@ class TestPatternCommands:
 class TestUnknownCommand:
     @pytest.mark.asyncio
     async def test_unknown_command_suggests_help(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="frobnicate")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="frobnicate")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
         assert "Unknown command" in msg
@@ -566,8 +588,8 @@ class TestUnknownCommand:
 class TestEmptyMessage:
     @pytest.mark.asyncio
     async def test_empty_message_no_reply(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="   ")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="   ")
         await handler._handle_pm(event)
         handler.client.send_pm.assert_not_awaited()
 
@@ -580,24 +602,24 @@ class TestEmptyMessage:
 class TestCounters:
     @pytest.mark.asyncio
     async def test_events_processed_incremented(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="help")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="help")
         assert handler.app._events_processed == 0
         await handler._handle_pm(event)
         assert handler.app._events_processed == 1
 
     @pytest.mark.asyncio
     async def test_commands_processed_incremented(self):
-        handler = _make_handler()
-        event = _make_event(rank=RANK_MOD, message="help")
+        handler = _make_handler(rank=RANK_MOD)
+        event = _make_event(message="help")
         assert handler.app._commands_processed == 0
         await handler._handle_pm(event)
         assert handler.app._commands_processed == 1
 
     @pytest.mark.asyncio
     async def test_rank_refusal_does_not_increment_command_counter(self):
-        handler = _make_handler()
-        event = _make_event(rank=0, message="ban someone")
+        handler = _make_handler(rank=0)
+        event = _make_event(message="ban someone")
         await handler._handle_pm(event)
         # events_processed is incremented (we received the event)
         assert handler.app._events_processed == 1
