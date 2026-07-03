@@ -10,13 +10,6 @@ Rank requirements
 Rank 3+  — Moderation commands: ban, unban, smute, unsmute, mute, unmute,
             list, more, check, about, help
 Rank 4+  — Admin commands: pattern list / add / remove
-
-Formatting
-----------
-CyTube PM messages support a subset of IRC-style control characters.
-This module uses:
-    \\x02  bold on / off toggle
-    \\x0f  reset all formatting
 """
 
 import logging
@@ -28,8 +21,8 @@ from kryten import ChatMessageEvent, KrytenClient
 # Formatting helpers
 # ---------------------------------------------------------------------------
 
-BOLD = "\x02"
-RESET = "\x0f"
+# Action-type emoji used in list / check output
+ACTION_EMOJI = {"ban": "🔨", "smute": "🔇", "mute": "🔕"}
 
 # Minimum rank thresholds
 RANK_MOD = 3
@@ -39,9 +32,10 @@ RANK_ADMIN = 4
 PAGE_SIZE = 20
 
 
-def b(text: str) -> str:
-    """Return *text* wrapped in bold control characters."""
-    return f"{BOLD}{text}{BOLD}"
+def _action_tag(action: str) -> str:
+    """Return a short emoji+label tag for an action type."""
+    emoji = ACTION_EMOJI.get(action, "❓")
+    return f"{emoji} {action.upper()}"
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +142,7 @@ class PMCommandHandler:
         if rank < RANK_MOD:
             await self._reply(
                 event,
-                f"PM commands require moderator rank ({RANK_MOD}+). "
+                f"⛔ PM commands require moderator rank ({RANK_MOD}+). "
                 f"Your rank: {rank}.",
             )
             return
@@ -181,7 +175,7 @@ class PMCommandHandler:
                 exc,
                 exc_info=True,
             )
-            await self._reply(event, f"Error: {exc}")
+            await self._reply(event, f"❌ Error: {exc}")
 
     async def _dispatch(
         self, event: ChatMessageEvent, command: str, args_str: str, *, rank: int
@@ -210,7 +204,7 @@ class PMCommandHandler:
             if rank < RANK_ADMIN:
                 await self._reply(
                     event,
-                    f"Command {b(command)!r} requires admin rank ({RANK_ADMIN}+). "
+                    f"⛔ '{command}' requires admin rank ({RANK_ADMIN}+). "
                     f"Your rank: {rank}.",
                 )
             else:
@@ -218,8 +212,8 @@ class PMCommandHandler:
         else:
             await self._reply(
                 event,
-                f"Unknown command: {b(command)}. "
-                f"Send {b('help')} for the list of available commands.",
+                f"❓ Unknown command: {command!r}. "
+                f"Send 'help' for the list of available commands.",
             )
 
     # ------------------------------------------------------------------
@@ -230,7 +224,7 @@ class PMCommandHandler:
         """ban <username> [reason]"""
         parts = args_str.split(None, 1)
         if not parts:
-            await self._reply(event, f"Usage: {b('ban')} <username> [reason]")
+            await self._reply(event, "Usage: ban <username> [reason]")
             return
         await self._add_moderation(
             event,
@@ -243,7 +237,7 @@ class PMCommandHandler:
         """unban <username>"""
         parts = args_str.split()
         if not parts:
-            await self._reply(event, f"Usage: {b('unban')} <username>")
+            await self._reply(event, "Usage: unban <username>")
             return
         await self._remove_moderation(event, parts[0])
 
@@ -251,7 +245,7 @@ class PMCommandHandler:
         """smute <username> [reason]"""
         parts = args_str.split(None, 1)
         if not parts:
-            await self._reply(event, f"Usage: {b('smute')} <username> [reason]")
+            await self._reply(event, "Usage: smute <username> [reason]")
             return
         await self._add_moderation(
             event,
@@ -264,7 +258,7 @@ class PMCommandHandler:
         """unsmute <username>"""
         parts = args_str.split()
         if not parts:
-            await self._reply(event, f"Usage: {b('unsmute')} <username>")
+            await self._reply(event, "Usage: unsmute <username>")
             return
         await self._remove_moderation(event, parts[0])
 
@@ -272,7 +266,7 @@ class PMCommandHandler:
         """mute <username> [reason]"""
         parts = args_str.split(None, 1)
         if not parts:
-            await self._reply(event, f"Usage: {b('mute')} <username> [reason]")
+            await self._reply(event, "Usage: mute <username> [reason]")
             return
         await self._add_moderation(
             event,
@@ -285,7 +279,7 @@ class PMCommandHandler:
         """unmute <username>"""
         parts = args_str.split()
         if not parts:
-            await self._reply(event, f"Usage: {b('unmute')} <username>")
+            await self._reply(event, "Usage: unmute <username>")
             return
         await self._remove_moderation(event, parts[0])
 
@@ -295,13 +289,12 @@ class PMCommandHandler:
         if filter_action and filter_action not in ("ban", "smute", "mute"):
             await self._reply(
                 event,
-                f"Invalid filter. Use: {b('list')}, {b('list ban')}, "
-                f"{b('list smute')}, or {b('list mute')}.",
+                "❓ Invalid filter. Use: list, list ban, list smute, or list mute.",
             )
             return
 
         if not self.app.moderation_lists:
-            await self._reply(event, "Moderation system is not ready.")
+            await self._reply(event, "⚠️ Moderation system is not ready.")
             return
 
         mod_list = await self.app.moderation_lists.get_list(event.domain, event.channel)
@@ -309,17 +302,16 @@ class PMCommandHandler:
 
         if not entries:
             label = f" ({filter_action})" if filter_action else ""
-            await self._reply(event, f"No moderation entries{label} for {b(event.channel)}.")
+            await self._reply(event, f"✅ No moderation entries{label} for #{event.channel}.")
             return
 
-        filter_tag = f"  [{filter_action}]" if filter_action else ""
+        filter_tag = f" [{filter_action}]" if filter_action else ""
         lines: list[str] = [
-            f"{b('Moderation list')} — {b(event.channel)}{filter_tag}"
-            f"  ({len(entries)} entries)",
+            f"📋 Moderation list — #{event.channel}{filter_tag} ({len(entries)} entries)",
         ]
         for entry in entries:
-            reason_str = f"  {RESET}{entry.reason}" if entry.reason else ""
-            lines.append(f"  {b(entry.action.upper())}  {entry.username}{reason_str}")
+            reason_str = f"  {entry.reason}" if entry.reason else ""
+            lines.append(f"  {_action_tag(entry.action)}  {entry.username}{reason_str}")
 
         await self._send_paginated(event, lines)
 
@@ -328,7 +320,7 @@ class PMCommandHandler:
         key = (event.username, event.channel, event.domain)
         pages = self._pending_pages.get(key)
         if not pages:
-            await self._reply(event, "No further results to show.")
+            await self._reply(event, "✅ No further results to show.")
             return
 
         page = pages.pop(0)
@@ -342,44 +334,41 @@ class PMCommandHandler:
             remaining = sum(len(p) for p in self._pending_pages[key])
             await self._reply(
                 event,
-                f"— {remaining} more line(s). "
-                f"Send {b('more')} to continue.",
+                f"⏩ {remaining} more line(s). Send 'more' to continue.",
             )
 
     async def _cmd_check(self, event: ChatMessageEvent, args_str: str) -> None:
         """check <username> — show moderation status for a user."""
         parts = args_str.split()
         if not parts:
-            await self._reply(event, f"Usage: {b('check')} <username>")
+            await self._reply(event, "Usage: check <username>")
             return
 
         username = parts[0]
         if not self.app.moderation_lists:
-            await self._reply(event, "Moderation system is not ready.")
+            await self._reply(event, "⚠️ Moderation system is not ready.")
             return
 
         mod_list = await self.app.moderation_lists.get_list(event.domain, event.channel)
         entry = await mod_list.get(username)
 
         if not entry:
-            await self._reply(event, f"{b(username)} is not in the moderation list.")
+            await self._reply(event, f"✅ {username} is not in the moderation list.")
             return
 
         # Normalise timestamp for display: drop microseconds and replace T
         ts = entry.timestamp[:19].replace("T", " ") if entry.timestamp else "unknown"
 
         lines = [
-            f"{b(username)} — {b(event.channel)}",
-            f"  Action :  {b(entry.action.upper())}",
-            f"  Added by: {entry.moderator}",
-            f"  Date :    {ts}",
+            f"{_action_tag(entry.action)}  {username}  (#{event.channel})",
+            f"  👮 by {entry.moderator}  🕐 {ts}",
         ]
         if entry.reason:
-            lines.append(f"  Reason :  {entry.reason}")
+            lines.append(f"  💬 {entry.reason}")
         if entry.ip_correlation_source:
-            lines.append(f"  IP match: correlated with {b(entry.ip_correlation_source)}")
+            lines.append(f"  🔗 IP match with {entry.ip_correlation_source}")
         if entry.pattern_match:
-            lines.append(f"  Pattern : {entry.pattern_match}")
+            lines.append(f"  🔍 Pattern: {entry.pattern_match}")
 
         for line in lines:
             await self._reply(event, line)
@@ -400,16 +389,13 @@ class PMCommandHandler:
         )
 
         lines = [
-            f"{b('Kryten Moderator')}  v{__version__}",
-            f"  Uptime :       {hours}h {minutes}m {seconds}s",
-            f"  Actions taken: {total}"
-            f"  (ban {self.app._bans_enforced} /"
-            f" smute {self.app._smutes_enforced} /"
-            f" mute {self.app._mutes_enforced})",
-            f"  IP detections: {self.app._ip_correlations}",
-            f"  Pattern hits:  {self.app._pattern_matches}",
-            f"  Events seen:   {self.app._events_processed}",
-            f"  Commands run:  {self.app._commands_processed}",
+            f"🤖 Kryten Moderator v{__version__}",
+            f"  ⏱️  Uptime:    {hours}h {minutes}m {seconds}s",
+            f"  ⚡ Actions:   {total}  (🔨{self.app._bans_enforced} / 🔇{self.app._smutes_enforced} / 🔕{self.app._mutes_enforced})",
+            f"  🔗 IP detect: {self.app._ip_correlations}",
+            f"  🔍 Patterns:  {self.app._pattern_matches}",
+            f"  📨 Events:    {self.app._events_processed}",
+            f"  💻 Commands:  {self.app._commands_processed}",
         ]
         for line in lines:
             await self._reply(event, line)
@@ -420,25 +406,25 @@ class PMCommandHandler:
         # threading it through every call site.
         rank = await self._get_sender_rank(event)
         lines = [
-            f"{b('Kryten Moderator')}  — command reference",
-            f"  {b('ban')} <user> [reason]        Ban user (kicked on join)",
-            f"  {b('unban')} <user>               Remove ban",
-            f"  {b('smute')} <user> [reason]      Shadow-mute (user unaware)",
-            f"  {b('unsmute')} <user>             Remove shadow mute",
-            f"  {b('mute')} <user> [reason]       Visible mute",
-            f"  {b('unmute')} <user>              Remove mute",
-            f"  {b('list')} [ban|smute|mute]      List moderated users",
-            f"  {b('more')}                       Next page of results",
-            f"  {b('check')} <user>               Moderation status",
-            f"  {b('about')}                      Version and statistics",
-            f"  {b('help')}                       This message",
+            "🤖 Kryten Moderator — commands",
+            "  ban <user> [reason]     🔨 Ban (kicked on join)",
+            "  unban <user>            ✅ Remove ban",
+            "  smute <user> [reason]   🔇 Shadow-mute (silent)",
+            "  unsmute <user>          ✅ Remove shadow mute",
+            "  mute <user> [reason]    🔕 Visible mute",
+            "  unmute <user>           ✅ Remove mute",
+            "  list [ban|smute|mute]   📋 List moderated users",
+            "  more                    ⏩ Next page",
+            "  check <user>            🔎 Moderation status",
+            "  about                   ℹ️  Version and stats",
+            "  help                    ❓ This message",
         ]
         if rank >= RANK_ADMIN:
             lines += [
-                f"  {b('pattern list')}               List banned patterns",
-                f"  {b('pattern add')} <p> [regex] [action] [desc]",
-                f"                               Add banned pattern",
-                f"  {b('pattern remove')} <p>          Remove pattern",
+                "  pattern list            📜 List banned patterns",
+                "  pattern add <p> [regex] [action] [desc]",
+                "                          ➕ Add pattern",
+                "  pattern remove <p>      ➖ Remove pattern",
             ]
         for line in lines:
             await self._reply(event, line)
@@ -451,10 +437,7 @@ class PMCommandHandler:
         """pattern <list|add|remove> [args]"""
         parts = args_str.split(None, 1)
         if not parts:
-            await self._reply(
-                event,
-                f"Usage: {b('pattern')} <list|add|remove> [args]",
-            )
+            await self._reply(event, "Usage: pattern <list|add|remove> [args]")
             return
 
         sub = parts[0].lower()
@@ -469,9 +452,8 @@ class PMCommandHandler:
         else:
             await self._reply(
                 event,
-                f"Unknown sub-command: {b(sub)}. "
-                f"Use {b('pattern list')}, {b('pattern add')}, "
-                f"or {b('pattern remove')}.",
+                f"❓ Unknown sub-command: {sub!r}. "
+                "Use: pattern list, pattern add, or pattern remove.",
             )
 
     async def _cmd_pattern_list(
@@ -486,17 +468,17 @@ class PMCommandHandler:
         entries = await pm.list_all()
 
         if not entries:
-            await self._reply(event, f"No patterns configured for {b(event.channel)}.")
+            await self._reply(event, f"✅ No patterns configured for #{event.channel}.")
             return
 
         lines: list[str] = [
-            f"{b('Banned patterns')} — {b(event.channel)}  ({len(entries)} entries)",
+            f"📜 Banned patterns — #{event.channel}  ({len(entries)} entries)",
         ]
         for entry in entries:
             type_tag = "regex" if entry.is_regex else "text"
-            desc = f"  {RESET}{entry.description}" if entry.description else ""
+            desc = f"  {entry.description}" if entry.description else ""
             lines.append(
-                f"  {b(entry.action.upper())}  [{type_tag}]  {entry.pattern}{desc}"
+                f"  {_action_tag(entry.action)}  [{type_tag}]  {entry.pattern}{desc}"
             )
 
         await self._send_paginated(event, lines)
@@ -506,12 +488,12 @@ class PMCommandHandler:
         if not args_str.strip():
             await self._reply(
                 event,
-                f"Usage: {b('pattern add')} <pattern> [regex] [ban|smute|mute] [desc]",
+                "Usage: pattern add <pattern> [regex] [ban|smute|mute] [desc]",
             )
             return
 
         if not self.app.pattern_managers:
-            await self._reply(event, "Pattern matching is not enabled.")
+            await self._reply(event, "⚠️ Pattern matching is not enabled.")
             return
 
         tokens = args_str.split()
@@ -540,27 +522,27 @@ class PMCommandHandler:
         type_tag = "regex" if entry.is_regex else "text"
         await self._reply(
             event,
-            f"Pattern added: {b(entry.pattern)}  [{type_tag}] → {b(entry.action.upper())}",
+            f"✅ Pattern added: {entry.pattern}  [{type_tag}] → {_action_tag(entry.action)}",
         )
 
     async def _cmd_pattern_remove(self, event: ChatMessageEvent, args_str: str) -> None:
         """pattern remove <pattern>"""
         pattern = args_str.strip()
         if not pattern:
-            await self._reply(event, f"Usage: {b('pattern remove')} <pattern>")
+            await self._reply(event, "Usage: pattern remove <pattern>")
             return
 
         if not self.app.pattern_managers:
-            await self._reply(event, "Pattern matching is not enabled.")
+            await self._reply(event, "⚠️ Pattern matching is not enabled.")
             return
 
         pm = await self.app.pattern_managers.get_manager(event.domain, event.channel)
         removed = await pm.remove(pattern)
 
         if removed:
-            await self._reply(event, f"Pattern removed: {b(pattern)}")
+            await self._reply(event, f"✅ Pattern removed: {pattern}")
         else:
-            await self._reply(event, f"Pattern not found: {b(pattern)}")
+            await self._reply(event, f"❌ Pattern not found: {pattern}")
 
     # ------------------------------------------------------------------
     # Shared moderation helpers
@@ -576,7 +558,7 @@ class PMCommandHandler:
         """Add *username* to the moderation list and apply the action immediately
         if the user is currently online."""
         if not self.app.moderation_lists:
-            await self._reply(event, "Moderation system is not ready.")
+            await self._reply(event, "⚠️ Moderation system is not ready.")
             return
 
         mod_list = await self.app.moderation_lists.get_list(event.domain, event.channel)
@@ -590,9 +572,9 @@ class PMCommandHandler:
         # Attempt to apply the action right now if the user is online
         await self._apply_action_if_online(event.domain, event.channel, username, entry)
 
-        label = {"ban": "Banned", "smute": "Shadow-muted", "mute": "Muted"}[action]
+        label = {"ban": "🔨 Banned", "smute": "🔇 Shadow-muted", "mute": "🔕 Muted"}[action]
         reason_str = f"  ({reason})" if reason else ""
-        await self._reply(event, f"{label}: {b(username)}{reason_str}")
+        await self._reply(event, f"{label}: {username}{reason_str}")
 
     async def _remove_moderation(
         self,
@@ -601,18 +583,18 @@ class PMCommandHandler:
     ) -> None:
         """Remove *username* from the moderation list and unmute if online."""
         if not self.app.moderation_lists:
-            await self._reply(event, "Moderation system is not ready.")
+            await self._reply(event, "⚠️ Moderation system is not ready.")
             return
 
         mod_list = await self.app.moderation_lists.get_list(event.domain, event.channel)
         removed = await mod_list.remove(username)
 
         if not removed:
-            await self._reply(event, f"{b(username)} is not in the moderation list.")
+            await self._reply(event, f"❌ {username} is not in the moderation list.")
             return
 
         await self._unmute_if_online(event.domain, event.channel, username)
-        await self._reply(event, f"Removed {b(username)} from the moderation list.")
+        await self._reply(event, f"✅ Removed {username} from the moderation list.")
 
     async def _apply_action_if_online(
         self,
@@ -691,6 +673,5 @@ class PMCommandHandler:
             remaining = sum(len(p) for p in pages[1:])
             await self._reply(
                 event,
-                f"— {remaining} more line(s). "
-                f"Send {b('more')} for additional results.",
+                f"⏩ {remaining} more line(s). Send 'more' for additional results.",
             )

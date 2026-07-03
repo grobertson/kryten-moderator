@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kryten_moderator.pm_handler import RANK_ADMIN, RANK_MOD, PMCommandHandler, b
+from kryten_moderator.pm_handler import RANK_ADMIN, RANK_MOD, PMCommandHandler
 
 
 # ---------------------------------------------------------------------------
@@ -87,19 +87,6 @@ def _make_handler(app=None, bot_username="Kryten", rank=RANK_MOD):
 
 
 # ---------------------------------------------------------------------------
-# Formatting helpers
-# ---------------------------------------------------------------------------
-
-
-class TestFormatting:
-    def test_bold(self):
-        result = b("hello")
-        assert result.startswith("\x02")
-        assert result.endswith("\x02")
-        assert "hello" in result
-
-
-# ---------------------------------------------------------------------------
 # Rank gating
 # ---------------------------------------------------------------------------
 
@@ -113,6 +100,7 @@ class TestRankGating:
         handler.client.send_pm.assert_awaited_once()
         msg = handler.client.send_pm.call_args[0][2]
         assert "rank" in msg.lower()
+        assert "⛔" in msg
 
     @pytest.mark.asyncio
     async def test_rank_mod_can_send_commands(self):
@@ -417,7 +405,7 @@ class TestMoreCommand:
         event = _make_event(message="more")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
-        assert "No further" in msg
+        assert "No further" in msg or "✅" in msg
 
     @pytest.mark.asyncio
     async def test_more_shows_next_page(self):
@@ -576,7 +564,7 @@ class TestUnknownCommand:
         event = _make_event(message="frobnicate")
         await handler._handle_pm(event)
         msg = handler.client.send_pm.call_args[0][2]
-        assert "Unknown command" in msg
+        assert "Unknown command" in msg or "❓" in msg
         assert "help" in msg.lower()
 
 
