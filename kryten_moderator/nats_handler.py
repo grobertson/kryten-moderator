@@ -416,6 +416,10 @@ class ModeratorCommandHandler:
             elif entry.action == "mute":
                 await self.app.client.mute_user(channel, username, domain=domain)
                 self.logger.info(f"Applied immediate mute to {username} in {channel}")
+            await self._emit_event(
+                "enforcement.applied",
+                {"username": username, "channel": channel, "domain": domain, "action": entry.action},
+            )
         except Exception as e:
             # User may not be online, that's fine
             self.logger.debug(f"Could not apply immediate action to {username}: {e}")
@@ -425,8 +429,30 @@ class ModeratorCommandHandler:
         try:
             await self.app.client.unmute_user(channel, username, domain=domain)
             self.logger.info(f"Unmuted {username} in {channel}")
+            await self._emit_event(
+                "enforcement.removed",
+                {"username": username, "channel": channel, "domain": domain},
+            )
         except Exception as e:
             self.logger.debug(f"Could not unmute {username}: {e}")
+
+    async def _emit_event(self, event_type: str, payload: dict) -> None:
+        """Publish a moderator event to NATS (stub — not yet implemented).
+
+        Intended for bidirectional support in kryten-api-gate (v0.8.0).
+        When implemented, events will be published to:
+            kryten.moderator.event.<event_type>
+
+        Known event types:
+            enforcement.applied  — a moderation action was applied to a joining user
+            enforcement.removed  — a user was unmuted / removed from the moderation list
+
+        To activate, replace this body with:
+            await self.client.publish(
+                f"kryten.moderator.event.{event_type}", payload
+            )
+        """
+        # TODO(0.8.0): publish to kryten.moderator.event.<event_type> for REST push support
 
     async def _handle_pattern_add(self, request: dict) -> dict:
         """Handle pattern.add command - Add a banned username pattern.

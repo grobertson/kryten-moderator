@@ -20,7 +20,6 @@ from .metrics_server import MetricsServer
 from .moderation_list import ModerationEntry, ModerationListManager
 from .nats_handler import ModeratorCommandHandler
 from .pattern_manager import PatternManagerRegistry
-from .pm_handler import PMCommandHandler
 
 
 class ModeratorService:
@@ -46,7 +45,6 @@ class ModeratorService:
         # Components
         self.client: KrytenClient | None = None
         self.command_handler: ModeratorCommandHandler | None = None
-        self.pm_handler: PMCommandHandler | None = None
         self.metrics_server: MetricsServer | None = None
         self.moderation_lists: ModerationListManager | None = None
         self.ip_managers: IPManagerRegistry | None = None
@@ -170,10 +168,6 @@ class ModeratorService:
         self.command_handler = ModeratorCommandHandler(self, self.client)
         await self.command_handler.connect()
 
-        # Initialize PM command handler for in-chat moderator control
-        self.pm_handler = PMCommandHandler(self, self.client)
-        await self.pm_handler.connect()
-
         # Initialize metrics server
         metrics_port = self.config.get("metrics", {}).get("port", 28284)
         self.metrics_server = MetricsServer(self, metrics_port)
@@ -196,11 +190,6 @@ class ModeratorService:
         if self.client:
             self.logger.debug("Stopping Kryten client...")
             await self.client.stop()
-
-        # Stop PM handler (no explicit disconnect — the client manages subscriptions)
-        if self.pm_handler:
-            self.logger.debug("PM command handler cleanup (managed by KrytenClient)")
-            self.pm_handler = None
 
         # Stop command handler
         if self.command_handler:
