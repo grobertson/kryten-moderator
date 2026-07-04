@@ -26,6 +26,7 @@
   "moderation": {
     "enable_ip_correlation": true,
     "enable_pattern_matching": true,
+    "history_retention_hours": 12,
     "default_patterns": [
       "1488",
       "卐",

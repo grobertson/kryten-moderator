@@ -6,6 +6,7 @@ rule that all NATS operations must go through kryten-py.
 """
 
 import logging
+import time
 from typing import Any
 
 from kryten import KrytenClient
@@ -106,6 +107,8 @@ class ModeratorCommandHandler:
             "pattern.add": self._handle_pattern_add,
             "pattern.remove": self._handle_pattern_remove,
             "pattern.list": self._handle_pattern_list,
+            # User history commands
+            "users.recent": self._handle_users_recent,
         }
 
         handler = handler_map.get(command)
@@ -435,6 +438,70 @@ class ModeratorCommandHandler:
             )
         except Exception as e:
             self.logger.debug(f"Could not unmute {username}: {e}")
+
+    async def _handle_users_recent(self, request: dict) -> dict:
+        """Handle users.recent command - List users seen within a time window.
+
+        Returns one record per user with a nested list of individual sessions.
+        Useful for identifying driveby accounts: join briefly, act, leave.
+
+        Request:
+            {
+                "command": "users.recent",
+                "channel": "lounge",       # Required
+                "domain": "cytu.be",       # Optional
+                "window_minutes": 60       # Optional, default 60, max = retention window
+            }
+        """
+        from datetime import datetime, timezone
+
+        channel = request.get("channel")
+        if not channel:
+            raise ValueError("channel is required")
+
+        domain = request.get("domain")
+        if not domain:
+            channels = self.app.config.get("channels", [])
+            domain = channels[0].get("domain", "cytu.be") if channels else "cytu.be"
+
+        try:
+            window_minutes = float(request.get("window_minutes", 60))
+        except (TypeError, ValueError) as e:
+            raise ValueError("window_minutes must be a number") from e
+
+        if window_minutes <= 0:
+            raise ValueError("window_minutes must be positive")
+
+        retention_hours = self.app.config.get("moderation", {}).get("history_retention_hours", 12)
+        window_minutes = min(window_minutes, retention_hours * 60)
+
+        if not self.app.user_history:
+            raise ValueError("User history tracking is not initialized")
+
+        mgr = self.app.user_history.get_manager(domain, channel)
+        if mgr is None:
+            raise ValueError(f"No history manager for channel '{channel}' on '{domain}'")
+
+        now = time.time()
+        records = mgr.query(window_seconds=window_minutes * 60, now=now)
+
+        users_out = []
+        for record in records:
+            mod_action = None
+            if self.app.moderation_lists:
+                entry = self.app.moderation_lists.check_username(domain, channel, record.username)
+                if entry:
+                    mod_action = entry.action
+            users_out.append(record.to_dict(moderation_action=mod_action))
+
+        return {
+            "channel": channel,
+            "domain": domain,
+            "window_minutes": window_minutes,
+            "generated_at": datetime.fromtimestamp(now, tz=timezone.utc).isoformat(),
+            "count": len(users_out),
+            "users": users_out,
+        }
 
     async def _emit_event(self, event_type: str, payload: dict) -> None:
         """Publish a moderator event to NATS (stub — not yet implemented).

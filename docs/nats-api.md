@@ -331,6 +331,64 @@ List all registered banned patterns for a channel.
 
 ---
 
+### `users.recent`
+
+List users seen in a channel within a rolling time window, with per-session detail.
+Designed for identifying "driveby" accounts: users who join briefly, act, and leave.
+
+**Request fields**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `channel` | string | ✅ | CyTube channel name |
+| `domain` | string | — | CyTube domain |
+| `window_minutes` | number | — | How far back to look; default `60`, capped at `history_retention_hours × 60` |
+
+**Response `data`**
+```json
+{
+  "channel": "lounge",
+  "domain": "cytu.be",
+  "window_minutes": 60.0,
+  "generated_at": "2026-07-04T01:00:00+00:00",
+  "count": 1,
+  "users": [
+    {
+      "username": "driveby_user",
+      "moderation_action": null,
+      "session_count": 3,
+      "total_messages": 2,
+      "last_seen": "2026-07-04T00:59:00+00:00",
+      "sessions": [
+        {
+          "joined_at": "2026-07-04T00:45:00+00:00",
+          "left_at": "2026-07-04T00:45:12+00:00",
+          "duration_seconds": 12.0,
+          "ip": "1.2.3.x",
+          "message_count": 1
+        },
+        {
+          "joined_at": "2026-07-04T00:59:00+00:00",
+          "left_at": null,
+          "duration_seconds": null,
+          "ip": "1.2.3.x",
+          "message_count": 1
+        }
+      ]
+    }
+  ]
+}
+```
+
+`moderation_action` is the user's **current** moderation status (`"ban"`, `"smute"`, `"mute"`, or `null`).
+`left_at` is `null` and `duration_seconds` is `null` for sessions where the user is still present.
+Results are sorted by `last_seen` descending (most recently active user first).
+
+The service retains up to `history_retention_hours` (default 12) of data; configure under
+`moderation.history_retention_hours` in `config.json`.
+
+---
+
 ## Planned: Event Publishing (v0.8.0)
 
 When kryten-api-gate requires real-time push notifications the moderator will
