@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-04
+
+### Added
+
+- **NATS API reference** (`docs/nats-api.md`): standalone consumer-facing
+  documentation covering all commands with full request/response schemas,
+  integration notes, suggested REST endpoint mapping, and error → HTTP status
+  guidance for kryten-api-gate
+
+- **`users.recent` NATS command**: rolling in-memory user connection history
+  (default 12 h retention, configurable via `moderation.history_retention_hours`)
+  Returns one record per user with a nested sessions list including
+  `joined_at`, `left_at`, `duration_seconds`, masked IP, and `message_count`,
+  plus the user's current `moderation_action`. Designed for identifying
+  "driveby" accounts. Query window is a request argument (default 60 min)
+
+- **`_emit_event` stub** in `ModeratorCommandHandler`: no-op placeholder for
+  future bidirectional event publishing to `kryten.moderator.event.<type>`;
+  called from enforcement points, ready for v0.8.0 wiring
+
+- **`moderation.history_retention_hours`** config key (default `12`) in
+  `config.example.json`
+
+### Changed
+
+- **kryten-py upgraded** from `>=0.13.1` to `>=0.17.0`. Version 0.17.0 adds
+  automatic delay + jitter throttling on all outgoing `send_pm()` and
+  `send_chat()` calls (`chat_min_delay: 1.0 s`, `chat_jitter: 0.5 s`).
+  Both tuning knobs are now exposed in `config.example.json`
+
+### Removed
+
+- **In-chat PM command handler** (`kryten_moderator/pm_handler.py` and
+  `tests/test_pm_handler.py`): replaced by the NATS request/reply API which
+  kryten-api-gate exposes as REST endpoints, following the pattern established
+  by the rest of the Kryten ecosystem
+
 ## [0.6.5] - 2026-07-02
 
 ### Fixed

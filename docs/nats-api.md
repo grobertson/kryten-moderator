@@ -37,6 +37,38 @@ Every call uses the same envelope:
 
 ---
 
+## Integration Notes
+
+### Sending a request (kryten-api-gate)
+
+```python
+reply = await nats_client.request(
+    "kryten.moderator.command",
+    json.dumps({"command": "entry.add", "channel": "lounge", ...}).encode(),
+    timeout=10.0,  # seconds — use 10 s for all commands
+)
+response = json.loads(reply.data)
+```
+
+Recommended timeout: **10 seconds** for all commands.
+
+### Timestamps
+
+All timestamps are ISO 8601 strings.  
+- `entry.*` and `pattern.*` fields (`timestamp`) — stored as local-time ISO strings with no UTC offset (value of `datetime.now().isoformat()` at the service host).
+- `users.recent` fields (`joined_at`, `left_at`, `last_seen`, `generated_at`) — always UTC with explicit `+00:00` offset.
+- `system.ping` field (`timestamp`) — local-time ISO string.
+
+### `domain` default
+
+When `domain` is omitted the service uses the domain of the **first** channel listed in its `config.json`. In a single-channel deployment this can always be omitted.
+
+### `entry.add` overwrite behaviour
+
+If a user is already on the moderation list, `entry.add` **replaces** the existing entry with the new action, reason, and moderator. The replacement is applied immediately if the user is online.
+
+---
+
 ## Commands
 
 ### `system.ping`
@@ -386,6 +418,40 @@ Results are sorted by `last_seen` descending (most recently active user first).
 
 The service retains up to `history_retention_hours` (default 12) of data; configure under
 `moderation.history_retention_hours` in `config.json`.
+
+---
+
+## Suggested REST Endpoint Mapping
+
+Recommended mapping for kryten-api-gate. All endpoints operate on a named
+`channel`; `domain` is passed as an optional query parameter when needed.
+
+| Method | Path | NATS command |
+|---|---|---|
+| `GET` | `/api/v1/channels/{channel}/moderation` | `entry.list` |
+| `POST` | `/api/v1/channels/{channel}/moderation` | `entry.add` |
+| `GET` | `/api/v1/channels/{channel}/moderation/{username}` | `entry.get` |
+| `DELETE` | `/api/v1/channels/{channel}/moderation/{username}` | `entry.remove` |
+| `GET` | `/api/v1/channels/{channel}/patterns` | `pattern.list` |
+| `POST` | `/api/v1/channels/{channel}/patterns` | `pattern.add` |
+| `DELETE` | `/api/v1/channels/{channel}/patterns/{pattern}` | `pattern.remove` |
+| `GET` | `/api/v1/channels/{channel}/users/recent` | `users.recent` |
+| `GET` | `/api/v1/system/ping` | `system.ping` |
+| `GET` | `/api/v1/system/health` | `system.health` |
+| `GET` | `/api/v1/system/stats` | `system.stats` |
+
+### Error → HTTP status mapping
+
+| Condition | HTTP status |
+|---|---|
+| NATS request times out (no reply) | `503 Service Unavailable` |
+| `success: false`, error contains "required" | `400 Bad Request` |
+| `success: false`, error contains "not found" / "not in" | `404 Not Found` |
+| `success: false`, error contains "must be" / "invalid" | `400 Bad Request` |
+| `success: false`, any other error | `500 Internal Server Error` |
+| `success: true` on `DELETE` | `200 OK` (return the `data` object) |
+| `success: true` on `POST` | `201 Created` (return the `data` object) |
+| `success: true` on `GET` | `200 OK` (return the `data` object) |
 
 ---
 
