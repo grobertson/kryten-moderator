@@ -20,6 +20,7 @@ from .metrics_server import MetricsServer
 from .moderation_list import ModerationEntry, ModerationListManager
 from .nats_handler import ModeratorCommandHandler
 from .pattern_manager import PatternManagerRegistry
+from .user_history import UserHistoryRegistry
 
 
 class ModeratorService:
@@ -45,6 +46,7 @@ class ModeratorService:
         # Components
         self.client: KrytenClient | None = None
         self.command_handler: ModeratorCommandHandler | None = None
+        self.user_history: UserHistoryRegistry | None = None
         self.metrics_server: MetricsServer | None = None
         self.moderation_lists: ModerationListManager | None = None
         self.ip_managers: IPManagerRegistry | None = None
@@ -168,6 +170,12 @@ class ModeratorService:
         self.command_handler = ModeratorCommandHandler(self, self.client)
         await self.command_handler.connect()
 
+        # Initialize user connection history (in-memory, per-channel)
+        retention_hours = mod_config.get("history_retention_hours", 12)
+        self.user_history = UserHistoryRegistry(retention_seconds=retention_hours * 3600)
+        self.user_history.initialize_all(channels)
+        self.logger.info(f"User history tracking initialized: {retention_hours}h retention")
+
         # Initialize metrics server
         metrics_port = self.config.get("metrics", {}).get("port", 28284)
         self.metrics_server = MetricsServer(self, metrics_port)
@@ -231,6 +239,13 @@ class ModeratorService:
             # Track user
             self._users_tracked.add(event.username.lower())
 
+            # Record message in user history
+            if self.user_history:
+                channel = getattr(event, "channel", None)
+                domain = getattr(event, "domain", self._domain)
+                if channel:
+                    self.user_history.on_message(domain, channel, event.username)
+
         except Exception as e:
             self.logger.error(f"Error handling chat message: {e}", exc_info=True)
 
@@ -249,6 +264,10 @@ class ModeratorService:
             # Extract IP from event (may be None if not available)
             full_ip, masked_ip = extract_ip_from_event(event)
             ip = full_ip or masked_ip  # Prefer full IP
+
+            # Record join in user history (masked IP only — history is exposed externally)
+            if self.user_history:
+                self.user_history.on_join(domain, event.channel, event.username, masked_ip)
 
             # Check moderation list for this channel
             if self.moderation_lists:
@@ -470,6 +489,11 @@ class ModeratorService:
 
         try:
             self.logger.debug(f"User left: {event.username} from {event.channel}")
+
+            # Close history session for departing user
+            if self.user_history:
+                domain = getattr(event, "domain", self._domain)
+                self.user_history.on_leave(domain, event.channel, event.username)
 
         except Exception as e:
             self.logger.error(f"Error handling user leave: {e}", exc_info=True)
