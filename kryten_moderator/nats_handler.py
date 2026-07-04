@@ -421,7 +421,12 @@ class ModeratorCommandHandler:
                 self.logger.info(f"Applied immediate mute to {username} in {channel}")
             await self._emit_event(
                 "enforcement.applied",
-                {"username": username, "channel": channel, "domain": domain, "action": entry.action},
+                {
+                    "username": username,
+                    "channel": channel,
+                    "domain": domain,
+                    "action": entry.action,
+                },
             )
         except Exception as e:
             # User may not be online, that's fine

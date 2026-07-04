@@ -22,8 +22,8 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-MAX_RETENTION_SECONDS: float = 12 * 3600   # 12 hours
-DEFAULT_WINDOW_SECONDS: float = 3600        # 1 hour
+MAX_RETENTION_SECONDS: float = 12 * 3600  # 12 hours
+DEFAULT_WINDOW_SECONDS: float = 3600  # 1 hour
 
 
 def _ts(t: float) -> str:
@@ -35,9 +35,9 @@ def _ts(t: float) -> str:
 class Session:
     """A single contiguous visit by a user to a channel."""
 
-    joined_at: float                    # Unix timestamp (UTC)
-    left_at: float | None = None        # None means user is still present
-    ip: str | None = None               # Masked IP, e.g. "1.2.3.x"
+    joined_at: float  # Unix timestamp (UTC)
+    left_at: float | None = None  # None means user is still present
+    ip: str | None = None  # Masked IP, e.g. "1.2.3.x"
     message_count: int = 0
 
     @property
@@ -191,7 +191,8 @@ class UserHistoryManager:
         results: list[UserRecord] = []
         for record in self._records.values():
             windowed = [
-                s for s in record.sessions
+                s
+                for s in record.sessions
                 if s.is_active or (s.left_at is not None and s.left_at >= cutoff)
             ]
             if windowed:
@@ -221,7 +222,8 @@ class UserHistoryManager:
         to_delete: list[str] = []
         for key, record in self._records.items():
             record.sessions = [
-                s for s in record.sessions
+                s
+                for s in record.sessions
                 if s.is_active or (s.left_at is not None and s.left_at >= cutoff)
             ]
             if not record.sessions:

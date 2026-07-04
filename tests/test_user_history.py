@@ -39,7 +39,9 @@ class TestSession:
         assert s.duration_seconds == pytest.approx(0.0)
 
     def test_to_dict_keys(self):
-        s = Session(joined_at=1_751_000_000.0, left_at=1_751_000_060.0, ip="1.2.3.x", message_count=3)
+        s = Session(
+            joined_at=1_751_000_000.0, left_at=1_751_000_060.0, ip="1.2.3.x", message_count=3
+        )
         d = s.to_dict()
         assert set(d) == {"joined_at", "left_at", "duration_seconds", "ip", "message_count"}
         assert d["duration_seconds"] == pytest.approx(60.0)
@@ -64,10 +66,13 @@ class TestUserRecord:
         assert r.session_count == 2
 
     def test_total_messages(self):
-        r = UserRecord("Alice", sessions=[
-            Session(1.0, message_count=3),
-            Session(2.0, message_count=7),
-        ])
+        r = UserRecord(
+            "Alice",
+            sessions=[
+                Session(1.0, message_count=3),
+                Session(2.0, message_count=7),
+            ],
+        )
         assert r.total_messages == 10
 
     def test_total_messages_empty(self):
@@ -83,10 +88,13 @@ class TestUserRecord:
         assert r.last_seen == pytest.approx(1.0)
 
     def test_last_seen_uses_last_session(self):
-        r = UserRecord("Alice", sessions=[
-            Session(1.0, left_at=2.0),
-            Session(10.0, left_at=20.0),
-        ])
+        r = UserRecord(
+            "Alice",
+            sessions=[
+                Session(1.0, left_at=2.0),
+                Session(10.0, left_at=20.0),
+            ],
+        )
         assert r.last_seen == pytest.approx(20.0)
 
     def test_last_seen_none_when_no_sessions(self):
@@ -110,9 +118,12 @@ class TestUserRecord:
         assert r.active_session is None
 
     def test_to_dict_shape(self):
-        r = UserRecord("Alice", sessions=[
-            Session(1_751_000_000.0, left_at=1_751_000_030.0, ip="1.2.3.x", message_count=2)
-        ])
+        r = UserRecord(
+            "Alice",
+            sessions=[
+                Session(1_751_000_000.0, left_at=1_751_000_030.0, ip="1.2.3.x", message_count=2)
+            ],
+        )
         d = r.to_dict(moderation_action="ban")
         assert d["username"] == "Alice"
         assert d["moderation_action"] == "ban"
@@ -243,10 +254,13 @@ class TestUserHistoryManager:
     def test_prune_removes_partial_old_sessions(self):
         mgr = self._mgr(retention=3600)
         now = time.time()
-        mgr._records["alice"] = UserRecord("alice", sessions=[
-            Session(joined_at=now - 7200, left_at=now - 7100),  # old
-            Session(joined_at=now - 30, left_at=now - 20),      # recent
-        ])
+        mgr._records["alice"] = UserRecord(
+            "alice",
+            sessions=[
+                Session(joined_at=now - 7200, left_at=now - 7100),  # old
+                Session(joined_at=now - 30, left_at=now - 20),  # recent
+            ],
+        )
         mgr._prune(now)
         assert mgr._records["alice"].session_count == 1
 
@@ -255,10 +269,13 @@ class TestUserHistoryManager:
     def test_query_filters_sessions_by_window(self):
         mgr = self._mgr()
         now = time.time()
-        mgr._records["alice"] = UserRecord("alice", sessions=[
-            Session(joined_at=now - 7200, left_at=now - 7190),  # 2h ago — outside 1h window
-            Session(joined_at=now - 1800, left_at=now - 1790),  # 30m ago — inside 1h window
-        ])
+        mgr._records["alice"] = UserRecord(
+            "alice",
+            sessions=[
+                Session(joined_at=now - 7200, left_at=now - 7190),  # 2h ago — outside 1h window
+                Session(joined_at=now - 1800, left_at=now - 1790),  # 30m ago — inside 1h window
+            ],
+        )
         results = mgr.query(window_seconds=3600, now=now)
         assert len(results) == 1
         assert results[0].session_count == 1
@@ -266,30 +283,31 @@ class TestUserHistoryManager:
     def test_query_excludes_users_with_no_recent_sessions(self):
         mgr = self._mgr()
         now = time.time()
-        mgr._records["alice"] = UserRecord("alice", sessions=[
-            Session(joined_at=now - 7200, left_at=now - 7190),
-        ])
+        mgr._records["alice"] = UserRecord(
+            "alice",
+            sessions=[
+                Session(joined_at=now - 7200, left_at=now - 7190),
+            ],
+        )
         assert mgr.query(window_seconds=3600, now=now) == []
 
     def test_query_includes_active_sessions_regardless_of_window(self):
         mgr = self._mgr()
         now = time.time()
         # Session started 2 hours ago but still open
-        mgr._records["alice"] = UserRecord("alice", sessions=[
-            Session(joined_at=now - 7200)
-        ])
+        mgr._records["alice"] = UserRecord("alice", sessions=[Session(joined_at=now - 7200)])
         results = mgr.query(window_seconds=3600, now=now)
         assert len(results) == 1
 
     def test_query_sorted_most_recent_first(self):
         mgr = self._mgr()
         now = time.time()
-        mgr._records["alice"] = UserRecord("alice", sessions=[
-            Session(joined_at=now - 500, left_at=now - 490)
-        ])
-        mgr._records["bob"] = UserRecord("bob", sessions=[
-            Session(joined_at=now - 100, left_at=now - 90)
-        ])
+        mgr._records["alice"] = UserRecord(
+            "alice", sessions=[Session(joined_at=now - 500, left_at=now - 490)]
+        )
+        mgr._records["bob"] = UserRecord(
+            "bob", sessions=[Session(joined_at=now - 100, left_at=now - 90)]
+        )
         results = mgr.query(window_seconds=3600, now=now)
         assert results[0].username == "bob"
         assert results[1].username == "alice"
@@ -299,9 +317,9 @@ class TestUserHistoryManager:
         now = time.time()
         # Session 20 min ago — within retention but > requested 1h
         # (window will be capped at 30 min retention so this session is included)
-        mgr._records["alice"] = UserRecord("alice", sessions=[
-            Session(joined_at=now - 1200, left_at=now - 1190)
-        ])
+        mgr._records["alice"] = UserRecord(
+            "alice", sessions=[Session(joined_at=now - 1200, left_at=now - 1190)]
+        )
         # Requesting 2 hours but retention is only 30 min
         results = mgr.query(window_seconds=7200, now=now)
         assert len(results) == 1
@@ -365,10 +383,12 @@ class TestUserHistoryRegistry:
 
     def test_multiple_channels_are_independent(self):
         reg = UserHistoryRegistry()
-        reg.initialize_all([
-            {"domain": "cytu.be", "channel": "lounge"},
-            {"domain": "cytu.be", "channel": "music"},
-        ])
+        reg.initialize_all(
+            [
+                {"domain": "cytu.be", "channel": "lounge"},
+                {"domain": "cytu.be", "channel": "music"},
+            ]
+        )
         reg.on_join("cytu.be", "lounge", "Alice")
         reg.on_join("cytu.be", "music", "Bob")
         assert reg.get_manager("cytu.be", "lounge").user_count == 1
