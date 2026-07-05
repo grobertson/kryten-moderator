@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-07-04
+
+### Fixed
+
+- **Ban enforcement uses `ban_user()` instead of `kick_user()`**: `_enforce_moderation`
+  and `_apply_action_if_online` previously called `kick_user()` for `ban` entries.
+  Kicks are session-level only — the user could rejoin immediately. Both now call
+  `client.ban_user()` which registers a persistent Cytube IP ban.
+
+- **Cytube ban list synced into moderator on startup**: Added a `banlist` event handler
+  and a startup `requestBanlist` call for each configured channel. Bans placed directly
+  in Cytube's admin UI are now imported into the moderator's NATS KV store
+  (`moderator="system:cytube_sync:<bannedby>"`). Existing moderator entries are never
+  overwritten.
+
 ## [0.7.0] - 2026-07-04
 
 ### Added
