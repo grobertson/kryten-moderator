@@ -117,6 +117,10 @@ class ModeratorService:
         async def handle_user_leave(event: UserLeaveEvent):
             await self._handle_user_leave(event)
 
+        @self.client.on("banlist")
+        async def handle_banlist(event: Any):
+            await self._handle_banlist_event(event)
+
         self.logger.info(f"Registered {len(self.client._handlers)} event types with handlers")
 
         # Connect to NATS (lifecycle events handled automatically via ServiceConfig)
@@ -133,6 +137,17 @@ class ModeratorService:
             f"Moderation lists ready: {self.moderation_lists.list_count} channels, "
             f"{self.moderation_lists.total_entries} entries"
         )
+
+        # Sync Cytube ban list into moderator's list on startup
+        for ch in channels:
+            ch_name = ch.get("channel")
+            ch_domain = ch.get("domain", self._domain)
+            if ch_name:
+                try:
+                    await self.client.request_banlist(ch_name, domain=ch_domain)
+                    self.logger.info(f"Requested Cytube ban list for {ch_domain}/{ch_name}")
+                except Exception as e:
+                    self.logger.warning(f"Could not request ban list for {ch_name}: {e}")
 
         # Initialize IP managers for IP correlation (if enabled)
         mod_config = self.config.get("moderation", {})
@@ -463,10 +478,10 @@ class ModeratorService:
 
         try:
             if entry.action == "ban":
-                # Kick the user (CyTube ban is IP-based, kick removes them)
-                await self.client.kick_user(channel, username, reason=entry.reason, domain=domain)
+                # Issue a Cytube ban (IP-based, persistent across rejoins)
+                await self.client.ban_user(channel, username, reason=entry.reason, domain=domain)
                 self._bans_enforced += 1
-                self.logger.warning(f"ENFORCED BAN: Kicked {username} from {channel}")
+                self.logger.warning(f"ENFORCED BAN: Banned {username} from {channel}")
 
             elif entry.action == "smute":
                 # Shadow mute - user doesn't know
@@ -482,6 +497,67 @@ class ModeratorService:
 
         except Exception as e:
             self.logger.error(f"Failed to enforce {entry.action} on {username}: {e}", exc_info=True)
+
+    async def _handle_banlist_event(self, event: Any) -> None:
+        """Handle incoming Cytube banlist event — sync bans into moderator's list.
+
+        Triggered by the banlist event that Cytube sends in response to
+        requestBanlist (issued on startup for each channel).  Any entry NOT
+        already in the moderator's KV store is added with action="ban" and
+        moderator="system:cytube_sync".
+
+        Args:
+            event: RawEvent whose payload is the Cytube banlist array.
+        """
+        try:
+            domain = getattr(event, "domain", self._domain)
+            channel = getattr(event, "channel", None)
+            if not channel:
+                self.logger.debug("banlist event has no channel, skipping")
+                return
+
+            payload = getattr(event, "payload", None)
+            if not isinstance(payload, list):
+                self.logger.debug(
+                    f"banlist payload is {type(payload).__name__}, expected list — skipping"
+                )
+                return
+
+            if not self.moderation_lists:
+                return
+
+            mod_list = await self.moderation_lists.get_list(domain, channel)
+            new_count = 0
+
+            for ban in payload:
+                if not isinstance(ban, dict):
+                    continue
+                username = ban.get("name")
+                if not username:
+                    continue
+
+                # Do not overwrite entries the moderator already owns
+                if await mod_list.get(username):
+                    continue
+
+                ip = ban.get("ip")
+                await mod_list.add(
+                    username=username,
+                    action="ban",
+                    moderator=f"system:cytube_sync:{ban.get('bannedby', 'unknown')}",
+                    reason=ban.get("reason"),
+                    ips=[ip] if ip else [],
+                )
+                new_count += 1
+
+            if new_count:
+                self.logger.info(
+                    f"Synced {new_count} Cytube ban(s) into moderator list "
+                    f"for {domain}/{channel}"
+                )
+
+        except Exception as e:
+            self.logger.error(f"Error handling banlist event: {e}", exc_info=True)
 
     async def _handle_user_leave(self, event: UserLeaveEvent) -> None:
         """Handle user leave event."""
