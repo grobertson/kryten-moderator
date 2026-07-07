@@ -5,6 +5,7 @@ import json
 import logging
 import signal
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -191,6 +192,13 @@ class ModeratorService:
         self.user_history.initialize_all(channels)
         self.logger.info(f"User history tracking initialized: {retention_hours}h retention")
 
+        # Seed user history and enforce moderation for users already in the channel
+        for ch in channels:
+            ch_name = ch.get("channel")
+            ch_domain = ch.get("domain", self._domain)
+            if ch_name:
+                await self._seed_from_userlist(ch_domain, ch_name)
+
         # Initialize metrics server
         metrics_port = self.config.get("metrics", {}).get("port", 28284)
         self.metrics_server = MetricsServer(self, metrics_port)
@@ -240,6 +248,66 @@ class ModeratorService:
         if self.client and self.client.lifecycle:
             await self.client.lifecycle.publish_startup()
             self.logger.info("Re-announced service startup")
+
+        # Re-seed from live userlist — users may have changed while robot was down
+        channels = self.config.get("channels", [])
+        for ch in channels:
+            ch_name = ch.get("channel")
+            ch_domain = ch.get("domain", self._domain)
+            if ch_name:
+                await self._seed_from_userlist(ch_domain, ch_name)
+
+    async def _get_online_users(self, domain: str, channel: str) -> list[dict]:
+        """Return the current user list from the robot's KV store.
+
+        The kryten-robot maintains a live snapshot at:
+          bucket  cytube_{safe_domain}_{channel}_userlist
+          key     users
+
+        Returns an empty list if the bucket is unavailable or empty.
+        """
+        if not self.client:
+            return []
+        safe_domain = domain.lower().replace(".", "_")
+        bucket = f"cytube_{safe_domain}_{channel.lower()}_userlist"
+        try:
+            return await self.client.kv_get(bucket, "users", default=[], parse_json=True)
+        except Exception as e:
+            self.logger.debug(f"Could not read userlist KV {bucket}: {e}")
+            return []
+
+    async def _seed_from_userlist(self, domain: str, channel: str) -> None:
+        """Seed user history and enforce moderation for all users currently in channel.
+
+        Reads the live user list that kryten-robot stores in NATS KV and passes
+        each user through the standard join-time enforcement path so that bans
+        and patterns are applied to users who were already present when the
+        moderator started (or when the robot reconnected).
+        """
+        users = await self._get_online_users(domain, channel)
+        if not users:
+            self.logger.info(f"No users in KV userlist for {domain}/{channel}")
+            return
+
+        self.logger.info(
+            f"Seeding {len(users)} user(s) from KV userlist for {domain}/{channel}"
+        )
+        now = datetime.now(timezone.utc)
+        for user_data in users:
+            if not isinstance(user_data, dict):
+                continue
+            username = user_data.get("name", "")
+            if not username:
+                continue
+            synthetic = UserJoinEvent(
+                username=username,
+                rank=user_data.get("rank", 0),
+                timestamp=now,
+                channel=channel,
+                domain=domain,
+                correlation_id="startup:userlist_seed",
+            )
+            await self._handle_user_join(synthetic)
 
     async def _handle_chat_message(self, event: ChatMessageEvent) -> None:
         """Handle chat message event for moderation checks."""
@@ -529,6 +597,7 @@ class ModeratorService:
 
             mod_list = await self.moderation_lists.get_list(domain, channel)
             new_count = 0
+            newly_added: list[str] = []
 
             for ban in payload:
                 if not isinstance(ban, dict):
@@ -549,6 +618,7 @@ class ModeratorService:
                     reason=ban.get("reason"),
                     ips=[ip] if ip else [],
                 )
+                newly_added.append(username)
                 new_count += 1
 
             if new_count:
@@ -556,6 +626,27 @@ class ModeratorService:
                     f"Synced {new_count} Cytube ban(s) into moderator list "
                     f"for {domain}/{channel}"
                 )
+                # Enforce any of the newly synced bans on users currently in the channel
+                online = await self._get_online_users(domain, channel)
+                newly_set = {u.lower() for u in newly_added}
+                for user_data in online:
+                    if not isinstance(user_data, dict):
+                        continue
+                    online_name = user_data.get("name", "")
+                    if not online_name or online_name.lower() not in newly_set:
+                        continue
+                    entry = await mod_list.get(online_name)
+                    if not entry:
+                        continue
+                    synthetic = UserJoinEvent(
+                        username=online_name,
+                        rank=user_data.get("rank", 0),
+                        timestamp=datetime.now(timezone.utc),
+                        channel=channel,
+                        domain=domain,
+                        correlation_id="banlist_sync:online_enforce",
+                    )
+                    await self._enforce_moderation(synthetic, entry)
 
         except Exception as e:
             self.logger.error(f"Error handling banlist event: {e}", exc_info=True)

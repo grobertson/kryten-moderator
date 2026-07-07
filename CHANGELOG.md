@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-07-06
+
+### Added
+
+- **Startup userlist seeding via NATS KV**: On startup (and whenever the kryten-robot
+  reconnects), the moderator now reads the live user list that kryten-robot maintains
+  in NATS KV (`cytube_{domain}_{channel}_userlist` / key `users`) and passes each
+  present user through the full join-time enforcement path (`_handle_user_join`). This
+  ensures users already in the channel when the moderator starts are tracked in user
+  history and have bans/patterns enforced immediately, without waiting for an `adduser`
+  event.
+
+### Fixed
+
+- **Banlist sync now enforces against currently-online users**: After importing Cytube
+  bans via `requestBanlist` / `_handle_banlist_event`, any of the newly-synced users
+  who are currently in the channel have their ban enforced immediately rather than
+  waiting for them to rejoin.
+
 ## [0.7.2] - 2026-07-06
 
 ### Fixed
