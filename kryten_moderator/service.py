@@ -546,9 +546,15 @@ class ModeratorService:
 
         try:
             if entry.action == "ban":
-                # Send Cytube ban command (name-based; behaviour for absent users is
-                # not verified — may succeed or silently no-op if user is not present).
-                await self.client.ban_user(channel, username, reason=entry.reason, domain=domain)
+                # Send ban via the robot's chat-command path (/ban <user>), which is
+                # the same mechanism used for smute and mute.
+                # client.ban_user() sends command:"ban" which the robot does not handle.
+                ban_msg = f"/ban {username}"
+                if entry.reason:
+                    ban_msg = f"/ban {username} {entry.reason}"
+                await self.client.send_command(
+                    "robot", "chat", {"message": ban_msg}, domain=domain, channel=channel
+                )
                 self._bans_enforced += 1
                 self.logger.warning(f"ENFORCED BAN: Banned {username} from {channel}")
 

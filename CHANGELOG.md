@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.5] - 2026-07-07
+
+### Fixed
+
+- **Ban enforcement actually reaches Cytube**: `client.ban_user()` sends
+  `command: "ban"` on `kryten.robot.command`, which the robot has no handler
+  for and silently drops. Bans are now issued via the same chat-command path
+  as smute/mute — `command: "chat"` with `"/ban <username> [reason]"`. This
+  fix is applied in both the join-time enforcement path (`_enforce_moderation`)
+  and the immediate-enforcement path in the NATS command handler
+  (`_apply_action_if_online`). Root cause confirmed via live NATS capture.
+
 ## [0.7.4] - 2026-07-06
 
 ### Added

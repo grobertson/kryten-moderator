@@ -411,8 +411,11 @@ class ModeratorCommandHandler:
         """
         try:
             if entry.action == "ban":
-                await self.app.client.ban_user(
-                    channel, username, reason=entry.reason, domain=domain
+                ban_msg = f"/ban {username}"
+                if entry.reason:
+                    ban_msg = f"/ban {username} {entry.reason}"
+                await self.app.client.send_command(
+                    "robot", "chat", {"message": ban_msg}, domain=domain, channel=channel
                 )
                 self.logger.info(f"Applied immediate ban to {username} in {channel}")
             elif entry.action == "smute":
