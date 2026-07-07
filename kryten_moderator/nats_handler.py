@@ -411,18 +411,19 @@ class ModeratorCommandHandler:
         """
         try:
             if entry.action == "ban":
-                ban_msg = f"/ban {username}"
-                if entry.reason:
-                    ban_msg = f"/ban {username} {entry.reason}"
-                await self.app.client.send_command(
-                    "robot", "chat", {"message": ban_msg}, domain=domain, channel=channel
+                await self.app.client.ban_user(
+                    channel, username, reason=entry.reason, domain=domain
                 )
                 self.logger.info(f"Applied immediate ban to {username} in {channel}")
             elif entry.action == "smute":
-                await self.app.client.shadow_mute_user(channel, username, domain=domain)
+                await self.app.client.send_command(
+                    "robot", "smute", {"name": username}, domain=domain, channel=channel
+                )
                 self.logger.info(f"Applied immediate smute to {username} in {channel}")
             elif entry.action == "mute":
-                await self.app.client.mute_user(channel, username, domain=domain)
+                await self.app.client.send_command(
+                    "robot", "mute", {"name": username}, domain=domain, channel=channel
+                )
                 self.logger.info(f"Applied immediate mute to {username} in {channel}")
             await self._emit_event(
                 "enforcement.applied",
@@ -440,7 +441,12 @@ class ModeratorCommandHandler:
     async def _unmute_if_online(self, domain: str, channel: str, username: str) -> None:
         """Unmute user if they are currently online."""
         try:
-            await self.app.client.unmute_user(channel, username, domain=domain)
+            # client.unmute_user() sends command:"chat" which the robot ignores.
+            # The robot's "say" handler sends raw chatMsg, which executes /unmute
+            # as a moderator command on Cytube.
+            await self.app.client.send_command(
+                "robot", "say", {"message": f"/unmute {username}"}, domain=domain, channel=channel
+            )
             self.logger.info(f"Unmuted {username} in {channel}")
             await self._emit_event(
                 "enforcement.removed",

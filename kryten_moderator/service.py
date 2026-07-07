@@ -546,27 +546,27 @@ class ModeratorService:
 
         try:
             if entry.action == "ban":
-                # Send ban via the robot's chat-command path (/ban <user>), which is
-                # the same mechanism used for smute and mute.
-                # client.ban_user() sends command:"ban" which the robot does not handle.
-                ban_msg = f"/ban {username}"
-                if entry.reason:
-                    ban_msg = f"/ban {username} {entry.reason}"
-                await self.client.send_command(
-                    "robot", "chat", {"message": ban_msg}, domain=domain, channel=channel
-                )
+                # client.ban_user() sends command:"ban" — the robot has a direct handler
+                # for this. Confirmed via live NATS capture of the dispatch table.
+                await self.client.ban_user(channel, username, reason=entry.reason, domain=domain)
                 self._bans_enforced += 1
                 self.logger.warning(f"ENFORCED BAN: Banned {username} from {channel}")
 
             elif entry.action == "smute":
-                # Shadow mute - user doesn't know
-                await self.client.shadow_mute_user(channel, username, domain=domain)
+                # client.shadow_mute_user() sends command:"chat" which the robot ignores.
+                # Use send_command with the robot's direct "smute" handler instead.
+                await self.client.send_command(
+                    "robot", "smute", {"name": username}, domain=domain, channel=channel
+                )
                 self._smutes_enforced += 1
                 self.logger.info(f"ENFORCED SMUTE: Shadow muted {username} in {channel}")
 
             elif entry.action == "mute":
-                # Visible mute - user is notified
-                await self.client.mute_user(channel, username, domain=domain)
+                # client.mute_user() sends command:"chat" which the robot ignores.
+                # Use send_command with the robot's direct "mute" handler instead.
+                await self.client.send_command(
+                    "robot", "mute", {"name": username}, domain=domain, channel=channel
+                )
                 self._mutes_enforced += 1
                 self.logger.info(f"ENFORCED MUTE: Muted {username} in {channel}")
 

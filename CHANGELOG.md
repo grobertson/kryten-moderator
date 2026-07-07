@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.6] - 2026-07-07
+
+### Fixed
+
+- **Smute and mute enforcement now actually reach the robot**: `client.shadow_mute_user()` and
+  `client.mute_user()` both send `command:"chat"` on `kryten.robot.command`. The robot has no
+  `"chat"` handler — it silently drops those messages. The robot DOES have direct `"smute"` and
+  `"mute"` handlers that accept `{"name": username}`. Enforcement paths now call
+  `client.send_command("robot", "smute"|"mute", {"name": u})` directly.
+- **Revert incorrect ban fix from 0.7.5**: `client.ban_user()` sends `command:"ban"` which the
+  robot handles correctly via `_handle_ban`. The 0.7.5 change to route bans via `"chat"` was
+  wrong (robot has no `"chat"` handler) and is now reverted.
+- **Unmute now reaches the robot**: `client.unmute_user()` also sends `command:"chat"`. The robot
+  has no `"unmute"` handler, but its `"say"` handler sends a raw `chatMsg` to Cytube.
+  `_unmute_if_online` now uses `send_command("robot", "say", {"/unmute user"})`.
+- Root cause confirmed by reading `Kryten-Robot/kryten/robot_command_handler.py` dispatch table
+  and `cytube_event_sender.py`.
+
 ## [0.7.5] - 2026-07-07
 
 ### Fixed
