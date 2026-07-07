@@ -478,7 +478,8 @@ class ModeratorService:
 
         try:
             if entry.action == "ban":
-                # Issue a Cytube ban (IP-based, persistent across rejoins)
+                # Send Cytube ban command (name-based; behaviour for absent users is
+                # not verified — may succeed or silently no-op if user is not present).
                 await self.client.ban_user(channel, username, reason=entry.reason, domain=domain)
                 self._bans_enforced += 1
                 self.logger.warning(f"ENFORCED BAN: Banned {username} from {channel}")

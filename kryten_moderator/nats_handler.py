@@ -402,10 +402,12 @@ class ModeratorCommandHandler:
     async def _apply_action_if_online(
         self, domain: str, channel: str, username: str, entry
     ) -> None:
-        """Apply moderation action if user is currently online.
+        """Attempt to apply the moderation action immediately.
 
-        This attempts to apply the action immediately - if the user is not
-        online, the action will fail silently (they'll be moderated on next join).
+        For smute/mute the user must be present in the channel.
+        For ban, Cytube's behaviour when the user is absent is unverified —
+        the command may succeed (name-based entry stored) or silently no-op.
+        Either way, the NATS KV entry guarantees enforcement on next join.
         """
         try:
             if entry.action == "ban":

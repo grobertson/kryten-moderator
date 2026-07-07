@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-07-06
+
+### Fixed
+
+- **Correct ban-command comment in `_enforce_moderation`**: removed incorrect claim
+  that Cytube bans are IP-based; the `ban` command uses the username as the key
+  identifier. Whether it accepts an absent user is unverified (only confirmed for PMs).
+- **Clarify `_apply_action_if_online` docstring**: smute/mute require user presence;
+  ban offline behaviour is unverified. NATS KV entry remains the guaranteed
+  enforcement path regardless of what the immediate command does.
+
 ## [0.7.1] - 2026-07-04
 
 ### Fixed
