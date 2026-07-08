@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.7] - 2026-07-07
+
+### Fixed
+
+- **Removing a banned user now actually lifts the Cytube ban**: `entry.remove` only ever sent
+  `/unmute` (via `_unmute_if_online`), so removing a *ban* entry did nothing on Cytube — the user
+  stayed banned. `entry.remove` now reverses the actual enforced action: `ban` entries call the
+  new `_unban_user`, which sends `command:"unban"` with the username to the robot; `mute`/`smute`
+  entries keep using the `/unmute` path. Requires kryten-robot ≥ 1.12.4, whose `unban` handler
+  resolves the numeric ban id from the channel banlist and sends the correctly-typed `unban`
+  frame (Cytube has no `/unban` chat command).
+
 ## [0.7.6] - 2026-07-07
 
 ### Fixed

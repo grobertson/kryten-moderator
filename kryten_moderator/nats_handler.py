@@ -286,13 +286,17 @@ class ModeratorCommandHandler:
             raise ValueError("username is required")
 
         mod_list = await self.app.moderation_lists.get_list(domain, channel)
+        entry = await mod_list.get(username)
         removed = await mod_list.remove(username)
 
         if not removed:
             raise ValueError(f"User '{username}' not in moderation list for {channel}")
 
-        # Unmute user if they're online
-        await self._unmute_if_online(domain, channel, username)
+        # Reverse whatever action was enforced on Cytube.
+        if entry is not None and entry.action == "ban":
+            await self._unban_user(domain, channel, username)
+        else:
+            await self._unmute_if_online(domain, channel, username)
 
         return {
             "username": username,
@@ -454,6 +458,26 @@ class ModeratorCommandHandler:
             )
         except Exception as e:
             self.logger.debug(f"Could not unmute {username}: {e}")
+
+    async def _unban_user(self, domain: str, channel: str, username: str) -> None:
+        """Remove a Cytube ban for a user.
+
+        Cytube has no "/unban" chat command; unbanning requires the numeric ban
+        id, which only Cytube knows. The robot's "unban" handler looks the id up
+        from the channel banlist by name, so we only need to pass the username.
+        Works whether or not the user is currently online.
+        """
+        try:
+            await self.app.client.send_command(
+                "robot", "unban", {"username": username}, domain=domain, channel=channel
+            )
+            self.logger.info(f"Unbanned {username} in {channel}")
+            await self._emit_event(
+                "enforcement.removed",
+                {"username": username, "channel": channel, "domain": domain},
+            )
+        except Exception as e:
+            self.logger.debug(f"Could not unban {username}: {e}")
 
     async def _handle_users_recent(self, request: dict) -> dict:
         """Handle users.recent command - List users seen within a time window.
