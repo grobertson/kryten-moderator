@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-08
+
+### Added
+
+- **Bidirectional ban-list reconciliation with tombstones**: the moderator now keeps its
+  ban list and Cytube's ban list in sync in *both* directions, and removals no longer get
+  resurrected by a concurrent additive sync (the race that made unbans appear to "undo"
+  themselves).
+  - A periodic loop requests each channel's Cytube ban list every
+    `ban_sync_interval_seconds` (default 60) and reconciles it against the moderator list.
+  - Each ban entry carries a `cytube_seen` flag so the reconciler can tell a *newly created
+    moderator ban not yet enforced on Cytube* (push `/ban`) from a *ban that was removed on
+    Cytube* (delete the moderator entry).
+  - Removals are recorded as short-lived **tombstones** (persisted per-channel in KV,
+    `tombstone_ttl_minutes`, default 15). A moderator-origin tombstone makes a stale ban-list
+    snapshot re-send the unban instead of re-importing the ban; a cytube-origin tombstone
+    suppresses re-import of a ban that was just removed on Cytube.
+  - Bans/unbans performed **directly in the Cytube UI** now propagate to the moderator list,
+    and moderator-side removals propagate to Cytube.
+
+### Fixed
+
+- **Removing a ban no longer gets undone moments later**: the old `_handle_banlist_event` was
+  additive-only (it imported Cytube bans but never removed anything), so any ban-list snapshot
+  arriving after an unban re-created the deleted ban. Reconciliation now handles deletions on
+  both sides. Requires kryten-robot ≥ 1.12.4.
+
+### Config
+
+- New `moderation.ban_sync_interval_seconds` (default 60) and `moderation.tombstone_ttl_minutes`
+  (default 15).
+
 ## [0.7.7] - 2026-07-07
 
 ### Fixed

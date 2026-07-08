@@ -17,6 +17,7 @@ from kryten import (
 )
 
 from .ip_manager import IPManager, IPManagerRegistry, extract_ip_from_event
+from .ban_tombstones import ORIGIN_CYTUBE, ORIGIN_MODERATOR, TombstoneManager
 from .metrics_server import MetricsServer
 from .moderation_list import ModerationEntry, ModerationListManager
 from .nats_handler import ModeratorCommandHandler
@@ -52,12 +53,15 @@ class ModeratorService:
         self.moderation_lists: ModerationListManager | None = None
         self.ip_managers: IPManagerRegistry | None = None
         self.pattern_managers: PatternManagerRegistry | None = None
+        self.tombstones: TombstoneManager | None = None
 
         # State
         self._running = False
         self._shutdown_event = asyncio.Event()
         self._start_time: float | None = None
         self._domain: str = "cytu.be"
+        self._reconcile_task: asyncio.Task | None = None
+        self._ban_sync_interval: int = 60
 
         # Statistics counters
         self._events_processed = 0
@@ -139,6 +143,17 @@ class ModeratorService:
             f"{self.moderation_lists.total_entries} entries"
         )
 
+        # Initialize ban tombstone tracking for bidirectional reconciliation
+        mod_config = self.config.get("moderation", {})
+        self._ban_sync_interval = int(mod_config.get("ban_sync_interval_seconds", 60))
+        tombstone_ttl = int(mod_config.get("tombstone_ttl_minutes", 15)) * 60
+        self.tombstones = TombstoneManager(self.client, ttl_seconds=tombstone_ttl)
+        for ch in channels:
+            ch_name = ch.get("channel")
+            ch_domain = ch.get("domain", self._domain)
+            if ch_name:
+                await self.tombstones.get_list(ch_domain, ch_name)
+
         # Sync Cytube ban list into moderator's list on startup
         for ch in channels:
             ch_name = ch.get("channel")
@@ -206,6 +221,13 @@ class ModeratorService:
 
         # Start event processing
         self._running = True
+
+        # Start periodic ban-list reconciliation loop
+        self._reconcile_task = asyncio.create_task(self._ban_reconcile_loop())
+        self.logger.info(
+            f"Ban-list reconciliation loop started (interval: {self._ban_sync_interval}s)"
+        )
+
         await self.client.run()
 
     async def stop(self) -> None:
@@ -216,6 +238,15 @@ class ModeratorService:
 
         self.logger.info("Stopping Kryten Moderator Service")
         self._running = False
+
+        # Stop periodic reconciliation loop
+        if self._reconcile_task:
+            self._reconcile_task.cancel()
+            try:
+                await self._reconcile_task
+            except asyncio.CancelledError:
+                pass
+            self._reconcile_task = None
 
         # Stop client event loop first
         if self.client:
@@ -573,16 +604,54 @@ class ModeratorService:
         except Exception as e:
             self.logger.error(f"Failed to enforce {entry.action} on {username}: {e}", exc_info=True)
 
-    async def _handle_banlist_event(self, event: Any) -> None:
-        """Handle incoming Cytube banlist event — sync bans into moderator's list.
+    async def _ban_reconcile_loop(self) -> None:
+        """Periodically request each channel's Cytube ban list to drive reconcile.
 
-        Triggered by the banlist event that Cytube sends in response to
-        requestBanlist (issued on startup for each channel).  Any entry NOT
-        already in the moderator's KV store is added with action="ban" and
-        moderator="system:cytube_sync".
+        The actual diff happens in ``_handle_banlist_event`` when the ``banlist``
+        snapshot arrives over NATS. This loop just triggers the request on a
+        fixed interval so that removals on either side converge.
+        """
+        try:
+            while self._running:
+                await asyncio.sleep(self._ban_sync_interval)
+                if not self._running or not self.client:
+                    break
+                channels = self.config.get("channels", [])
+                for ch in channels:
+                    ch_name = ch.get("channel")
+                    ch_domain = ch.get("domain", self._domain)
+                    if not ch_name:
+                        continue
+                    try:
+                        await self.client.request_banlist(ch_name, domain=ch_domain)
+                    except Exception as e:  # noqa: BLE001
+                        self.logger.debug(
+                            f"Periodic ban-list request failed for {ch_name}: {e}"
+                        )
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            self.logger.error(f"Ban reconcile loop crashed: {e}", exc_info=True)
+
+    async def _handle_banlist_event(self, event: Any) -> None:
+        """Reconcile the Cytube ban list with the moderator's list (bidirectional).
+
+        Triggered by every ``banlist`` snapshot (startup, periodic loop, or any
+        service issuing requestBanlist). Reconciliation rules (bans only — mutes
+        and smutes never appear in Cytube's ban list):
+
+        - present both sides -> in sync; clear any tombstone; mark cytube_seen.
+        - moderator-only, previously seen on Cytube -> removed on Cytube; delete
+          the moderator entry.
+        - moderator-only, never seen on Cytube -> new moderator ban; enforce it
+          on Cytube.
+        - Cytube-only with a moderator tombstone -> the moderator removed it;
+          re-send the unban and do NOT re-import (defeats the resurrection race).
+        - Cytube-only with no tombstone -> Cytube-originated ban; import it.
+        - absent both sides -> clear any stale tombstone.
 
         Args:
-            event: RawEvent whose payload is the Cytube banlist array.
+            event: RawEvent whose payload is the Cytube ban list array.
         """
         try:
             domain = getattr(event, "domain", self._domain)
@@ -598,48 +667,120 @@ class ModeratorService:
                 )
                 return
 
-            if not self.moderation_lists:
+            if not self.moderation_lists or self.tombstones is None:
                 return
 
             mod_list = await self.moderation_lists.get_list(domain, channel)
-            new_count = 0
-            newly_added: list[str] = []
+            tombstones = await self.tombstones.get_list(domain, channel)
+            await tombstones.prune()
 
+            # Index Cytube bans by lowercased name.
+            cytube_by_name: dict[str, dict] = {}
             for ban in payload:
                 if not isinstance(ban, dict):
                     continue
-                username = ban.get("name")
-                if not username:
-                    continue
+                name = ban.get("name")
+                if name:
+                    cytube_by_name[name.lower()] = ban
 
-                # Do not overwrite entries the moderator already owns
-                if await mod_list.get(username):
-                    continue
+            # Index moderator BAN entries by lowercased username.
+            mod_bans = {
+                e.username.lower(): e
+                for e in await mod_list.list_all(filter_action="ban")
+            }
 
-                ip = ban.get("ip")
-                await mod_list.add(
-                    username=username,
-                    action="ban",
-                    moderator=f"system:cytube_sync:{ban.get('bannedby', 'unknown')}",
-                    reason=ban.get("reason"),
-                    ips=[ip] if ip else [],
-                )
-                newly_added.append(username)
-                new_count += 1
+            imported: list[str] = []
 
-            if new_count:
+            for key in set(cytube_by_name) | set(mod_bans):
+                cytube_ban = cytube_by_name.get(key)
+                entry = mod_bans.get(key)
+                tombstone = tombstones.get(key)
+
+                if entry and cytube_ban:
+                    # In sync on both sides.
+                    await mod_list.mark_cytube_seen(entry.username, True)
+                    if tombstone:
+                        await tombstones.remove(key)
+
+                elif entry and not cytube_ban:
+                    if entry.cytube_seen:
+                        # Was on Cytube before, now gone -> unbanned on Cytube.
+                        await mod_list.remove(entry.username)
+                        # Tombstone so a stale snapshot still listing the ban does
+                        # not re-import it before it ages out.
+                        await tombstones.add(entry.username, ORIGIN_CYTUBE)
+                        self.logger.info(
+                            f"Ban for {entry.username} removed on Cytube — "
+                            f"deleted moderator entry ({domain}/{channel})"
+                        )
+                        await self._emit_event(
+                            "enforcement.removed",
+                            {
+                                "username": entry.username,
+                                "channel": channel,
+                                "domain": domain,
+                                "source": "cytube_unban",
+                            },
+                        )
+                    else:
+                        # Moderator ban not yet enforced on Cytube -> push it.
+                        self.logger.info(
+                            f"Enforcing moderator ban for {entry.username} on Cytube "
+                            f"({domain}/{channel})"
+                        )
+                        await self._push_ban_to_cytube(
+                            domain, channel, entry.username, entry.reason
+                        )
+
+                elif cytube_ban and not entry:
+                    if tombstone and tombstone.origin == ORIGIN_MODERATOR:
+                        # Moderator removed it; Cytube still lists it -> re-send unban.
+                        self.logger.info(
+                            f"Ban for {cytube_ban.get('name')} still on Cytube after "
+                            f"moderator removal — re-sending unban ({domain}/{channel})"
+                        )
+                        await self._unban_on_cytube(
+                            domain, channel, cytube_ban.get("name", key)
+                        )
+                    elif tombstone and tombstone.origin == ORIGIN_CYTUBE:
+                        # Removed on Cytube already; this is a stale snapshot still
+                        # listing it. Suppress re-import until the tombstone ages out.
+                        self.logger.debug(
+                            f"Ignoring stale Cytube ban for {cytube_ban.get('name')} "
+                            f"(recently removed on Cytube)"
+                        )
+                    else:
+                        # Cytube-originated ban -> import into moderator list.
+                        username = cytube_ban.get("name")
+                        ip = cytube_ban.get("ip")
+                        await mod_list.add(
+                            username=username,
+                            action="ban",
+                            moderator=f"system:cytube_sync:{cytube_ban.get('bannedby', 'unknown')}",
+                            reason=cytube_ban.get("reason"),
+                            ips=[ip] if ip else [],
+                            cytube_seen=True,
+                        )
+                        imported.append(username)
+
+                else:
+                    # Absent both sides — clear any stale tombstone.
+                    if tombstone:
+                        await tombstones.remove(key)
+
+            if imported:
                 self.logger.info(
-                    f"Synced {new_count} Cytube ban(s) into moderator list "
+                    f"Imported {len(imported)} Cytube ban(s) into moderator list "
                     f"for {domain}/{channel}"
                 )
-                # Enforce any of the newly synced bans on users currently in the channel
+                # Enforce newly imported bans on users currently in the channel.
                 online = await self._get_online_users(domain, channel)
-                newly_set = {u.lower() for u in newly_added}
+                imported_set = {u.lower() for u in imported}
                 for user_data in online:
                     if not isinstance(user_data, dict):
                         continue
                     online_name = user_data.get("name", "")
-                    if not online_name or online_name.lower() not in newly_set:
+                    if not online_name or online_name.lower() not in imported_set:
                         continue
                     entry = await mod_list.get(online_name)
                     if not entry:
@@ -656,6 +797,39 @@ class ModeratorService:
 
         except Exception as e:
             self.logger.error(f"Error handling banlist event: {e}", exc_info=True)
+
+    async def _push_ban_to_cytube(
+        self, domain: str, channel: str, username: str, reason: str | None
+    ) -> None:
+        """Enforce a moderator-originated ban on Cytube via the robot."""
+        if not self.client:
+            return
+        try:
+            await self.client.ban_user(channel, username, reason=reason, domain=domain)
+            self._bans_enforced += 1
+        except Exception as e:  # noqa: BLE001
+            self.logger.debug(f"Could not push ban for {username} to Cytube: {e}")
+
+    async def _unban_on_cytube(self, domain: str, channel: str, username: str) -> None:
+        """Send an unban to the robot for a moderator-removed ban."""
+        if not self.client:
+            return
+        try:
+            await self.client.send_command(
+                "robot", "unban", {"username": username}, domain=domain, channel=channel
+            )
+        except Exception as e:  # noqa: BLE001
+            self.logger.debug(f"Could not send unban for {username} to Cytube: {e}")
+
+    async def _emit_event(self, suffix: str, data: dict) -> None:
+        """Publish a moderator enforcement event (stub — not yet wired).
+
+        Mirrors ModeratorCommandHandler._emit_event. Bidirectional NATS event
+        emission is planned for kryten-api-gate integration; until then this is
+        a no-op so reconciliation does not depend on an unwired subject.
+        """
+        # TODO(0.8.0): publish to kryten.moderator.event.<suffix> for REST push support
+        self.logger.debug(f"[event:{suffix}] {data}")
 
     async def _handle_user_leave(self, event: UserLeaveEvent) -> None:
         """Handle user leave event."""

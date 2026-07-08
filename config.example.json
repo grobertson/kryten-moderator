@@ -27,6 +27,8 @@
     "enable_ip_correlation": true,
     "enable_pattern_matching": true,
     "history_retention_hours": 12,
+    "ban_sync_interval_seconds": 60,
+    "tombstone_ttl_minutes": 15,
     "default_patterns": [
       "1488",
       "卐",

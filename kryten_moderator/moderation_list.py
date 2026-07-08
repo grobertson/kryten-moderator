@@ -47,6 +47,10 @@ class ModerationEntry:
         ips: List of known IP addresses for this user
         ip_correlation_source: Original username if this was auto-added via IP correlation
         pattern_match: Pattern that matched if this was auto-added via pattern matching
+        cytube_seen: True once this ban has been observed in a Cytube ban-list
+            snapshot. Distinguishes a moderator ban not yet enforced on Cytube
+            (False) from a ban that was removed on Cytube (previously True, now
+            absent). Only meaningful for action=="ban".
     """
 
     username: str
@@ -57,6 +61,7 @@ class ModerationEntry:
     ips: list[str]
     ip_correlation_source: str | None = None
     pattern_match: str | None = None
+    cytube_seen: bool = False
 
     def to_json(self) -> str:
         """Serialize to JSON string."""
@@ -141,6 +146,7 @@ class ModerationList:
         ips: list[str] | None = None,
         ip_correlation_source: str | None = None,
         pattern_match: str | None = None,
+        cytube_seen: bool = False,
     ) -> ModerationEntry:
         """Add a user to the moderation list.
 
@@ -152,6 +158,7 @@ class ModerationList:
             ips: Optional list of known IPs
             ip_correlation_source: Set if auto-added via IP correlation
             pattern_match: Set if auto-added via pattern matching
+            cytube_seen: True if this ban was imported from a Cytube snapshot
 
         Returns:
             The created ModerationEntry
@@ -167,6 +174,7 @@ class ModerationList:
             ips=ips or [],
             ip_correlation_source=ip_correlation_source,
             pattern_match=pattern_match,
+            cytube_seen=cytube_seen,
         )
 
         # Store in KV
@@ -275,6 +283,26 @@ class ModerationList:
 
             self.logger.debug(f"Added IP {ip} to entry for {username}")
 
+        return True
+
+    async def mark_cytube_seen(self, username: str, seen: bool = True) -> bool:
+        """Set the ``cytube_seen`` flag on a user's entry and persist it.
+
+        Args:
+            username: Username to update (case-insensitive)
+            seen: Value to set for ``cytube_seen``
+
+        Returns:
+            True if the entry existed and was updated, False otherwise.
+        """
+        key = username.lower()
+        entry = self._cache.get(key)
+        if not entry:
+            return False
+        if entry.cytube_seen == seen:
+            return True
+        entry.cytube_seen = seen
+        await kv_put(self._kv, key, entry.to_json())
         return True
 
     @property

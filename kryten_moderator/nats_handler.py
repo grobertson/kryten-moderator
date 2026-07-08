@@ -11,6 +11,8 @@ from typing import Any
 
 from kryten import KrytenClient
 
+from .ban_tombstones import ORIGIN_MODERATOR
+
 
 class ModeratorCommandHandler:
     """Handles command queries on NATS subjects owned by moderator service."""
@@ -466,7 +468,19 @@ class ModeratorCommandHandler:
         id, which only Cytube knows. The robot's "unban" handler looks the id up
         from the channel banlist by name, so we only need to pass the username.
         Works whether or not the user is currently online.
+
+        A moderator-origin tombstone is recorded so that a stale additive ban-list
+        snapshot arriving during reconciliation does not resurrect the ban before
+        Cytube confirms the removal.
         """
+        # Record the tombstone first so any concurrent reconcile sees it.
+        if getattr(self.app, "tombstones", None) is not None:
+            try:
+                tombstones = await self.app.tombstones.get_list(domain, channel)
+                await tombstones.add(username, ORIGIN_MODERATOR)
+            except Exception as e:  # noqa: BLE001
+                self.logger.debug(f"Could not tombstone {username}: {e}")
+
         try:
             await self.app.client.send_command(
                 "robot", "unban", {"username": username}, domain=domain, channel=channel
