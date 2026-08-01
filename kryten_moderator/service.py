@@ -7,7 +7,7 @@ import signal
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from kryten import (
     ChatMessageEvent,
@@ -302,7 +302,10 @@ class ModeratorService:
         safe_domain = domain.lower().replace(".", "_")
         bucket = f"cytube_{safe_domain}_{channel.lower()}_userlist"
         try:
-            return await self.client.kv_get(bucket, "users", default=[], parse_json=True)
+            return cast(
+                list[dict[Any, Any]],
+                await self.client.kv_get(bucket, "users", default=[], parse_json=True),
+            )
         except Exception as e:
             self.logger.debug(f"Could not read userlist KV {bucket}: {e}")
             return []
@@ -742,7 +745,7 @@ class ModeratorService:
                         )
                     else:
                         # Cytube-originated ban -> import into moderator list.
-                        username = cytube_ban.get("name")
+                        username = cast(str, cytube_ban.get("name"))
                         ip = cytube_ban.get("ip")
                         await mod_list.add(
                             username=username,

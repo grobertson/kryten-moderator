@@ -375,7 +375,7 @@ wheels = [
 
 [[package]]
 name = "kryten-moderator"
-version = "0.6.5"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "kryten-py" },
