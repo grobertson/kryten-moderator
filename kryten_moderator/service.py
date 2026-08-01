@@ -16,8 +16,8 @@ from kryten import (
     UserLeaveEvent,
 )
 
-from .ip_manager import IPManager, IPManagerRegistry, extract_ip_from_event
 from .ban_tombstones import ORIGIN_CYTUBE, ORIGIN_MODERATOR, TombstoneManager
+from .ip_manager import IPManager, IPManagerRegistry, extract_ip_from_event
 from .metrics_server import MetricsServer
 from .moderation_list import ModerationEntry, ModerationListManager
 from .nats_handler import ModeratorCommandHandler
@@ -320,9 +320,7 @@ class ModeratorService:
             self.logger.info(f"No users in KV userlist for {domain}/{channel}")
             return
 
-        self.logger.info(
-            f"Seeding {len(users)} user(s) from KV userlist for {domain}/{channel}"
-        )
+        self.logger.info(f"Seeding {len(users)} user(s) from KV userlist for {domain}/{channel}")
         now = datetime.now(timezone.utc)
         for user_data in users:
             if not isinstance(user_data, dict):
@@ -625,9 +623,7 @@ class ModeratorService:
                     try:
                         await self.client.request_banlist(ch_name, domain=ch_domain)
                     except Exception as e:  # noqa: BLE001
-                        self.logger.debug(
-                            f"Periodic ban-list request failed for {ch_name}: {e}"
-                        )
+                        self.logger.debug(f"Periodic ban-list request failed for {ch_name}: {e}")
         except asyncio.CancelledError:
             raise
         except Exception as e:  # noqa: BLE001
@@ -684,10 +680,7 @@ class ModeratorService:
                     cytube_by_name[name.lower()] = ban
 
             # Index moderator BAN entries by lowercased username.
-            mod_bans = {
-                e.username.lower(): e
-                for e in await mod_list.list_all(filter_action="ban")
-            }
+            mod_bans = {e.username.lower(): e for e in await mod_list.list_all(filter_action="ban")}
 
             imported: list[str] = []
 
@@ -739,9 +732,7 @@ class ModeratorService:
                             f"Ban for {cytube_ban.get('name')} still on Cytube after "
                             f"moderator removal — re-sending unban ({domain}/{channel})"
                         )
-                        await self._unban_on_cytube(
-                            domain, channel, cytube_ban.get("name", key)
-                        )
+                        await self._unban_on_cytube(domain, channel, cytube_ban.get("name", key))
                     elif tombstone and tombstone.origin == ORIGIN_CYTUBE:
                         # Removed on Cytube already; this is a stale snapshot still
                         # listing it. Suppress re-import until the tombstone ages out.

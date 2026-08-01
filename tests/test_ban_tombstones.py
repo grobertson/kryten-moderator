@@ -1,6 +1,5 @@
 """Unit tests for the ban_tombstones module."""
 
-import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
@@ -21,7 +20,9 @@ def _iso(dt: datetime) -> str:
 
 class TestTombstone:
     def test_json_round_trip(self):
-        ts = Tombstone(username="Bad", origin=ORIGIN_MODERATOR, removed_at=_iso(datetime.now(timezone.utc)))
+        ts = Tombstone(
+            username="Bad", origin=ORIGIN_MODERATOR, removed_at=_iso(datetime.now(timezone.utc))
+        )
         restored = Tombstone.from_json(ts.to_json())
         assert restored == ts
 
