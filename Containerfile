@@ -28,5 +28,5 @@ RUN mkdir -p /etc/kryten/kryten-moderator /var/lib/kryten/kryten-moderator \
 
 USER kryten
 
-ENTRYPOINT ["python -m kryten_moderator"]
+ENTRYPOINT ["python", "-m", "kryten_moderator"]
 CMD ["--config", "/etc/kryten/kryten-moderator/config.json"]
