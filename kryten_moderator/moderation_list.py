@@ -209,7 +209,9 @@ class ModerationList:
         # Update cache
         del self._cache[key]
 
-        self.logger.info(f"Removed moderation entry for: {username} (channel: {self.channel})")
+        self.logger.info(
+            f"Removed moderation entry for: {username} (channel: {self.channel})"
+        )
         return True
 
     async def get(self, username: str) -> ModerationEntry | None:
@@ -331,7 +333,9 @@ class ModerationListManager:
         """
         self.client = client
         self.logger = logging.getLogger(__name__)
-        self._lists: dict[str, ModerationList] = {}  # "domain/channel" -> ModerationList
+        self._lists: dict[str, ModerationList] = (
+            {}
+        )  # "domain/channel" -> ModerationList
 
     def _make_key(self, domain: str, channel: str) -> str:
         """Create a key for the lists dict."""
@@ -373,7 +377,9 @@ class ModerationListManager:
             f"Initialized {len(self._lists)} moderation lists with {total} total entries"
         )
 
-    def check_username(self, domain: str, channel: str, username: str) -> ModerationEntry | None:
+    def check_username(
+        self, domain: str, channel: str, username: str
+    ) -> ModerationEntry | None:
         """Check if username is in a channel's moderation list.
 
         Fast synchronous lookup - assumes list is already initialized.

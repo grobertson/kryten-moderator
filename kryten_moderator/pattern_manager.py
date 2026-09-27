@@ -284,7 +284,8 @@ class PatternManager:
         self._patterns[key] = compiled
 
         self.logger.info(
-            f"Added pattern: '{pattern}' (regex={is_regex}, action={action}) " f"for {self.channel}"
+            f"Added pattern: '{pattern}' (regex={is_regex}, action={action}) "
+            f"for {self.channel}"
         )
         return entry
 
@@ -369,7 +370,9 @@ class PatternManagerRegistry:
         """
         self.client = client
         self.logger = logging.getLogger(__name__)
-        self._managers: dict[str, PatternManager] = {}  # "domain/channel" -> PatternManager
+        self._managers: dict[str, PatternManager] = (
+            {}
+        )  # "domain/channel" -> PatternManager
 
     def _make_key(self, domain: str, channel: str) -> str:
         """Create a key for the managers dict."""

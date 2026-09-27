@@ -139,7 +139,9 @@ class IPManager:
 
             self._cache[key] = usernames
 
-            self.logger.debug(f"Removed IP {self._mask_ip(ip)} association for {username}")
+            self.logger.debug(
+                f"Removed IP {self._mask_ip(ip)} association for {username}"
+            )
 
     def find_moderated_users_by_ip(
         self,

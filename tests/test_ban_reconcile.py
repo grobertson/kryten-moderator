@@ -52,7 +52,9 @@ def _event(payload):
 
 @pytest.mark.asyncio
 async def test_cytube_origin_ban_is_imported(service):
-    payload = [{"id": 1, "name": "NewBan", "ip": "1.2.3.4", "reason": "x", "bannedby": "admin"}]
+    payload = [
+        {"id": 1, "name": "NewBan", "ip": "1.2.3.4", "reason": "x", "bannedby": "admin"}
+    ]
 
     await service._handle_banlist_event(_event(payload))
 
@@ -66,7 +68,9 @@ async def test_cytube_origin_ban_is_imported(service):
 @pytest.mark.asyncio
 async def test_cytube_side_removal_deletes_moderator_entry(service):
     mod_list = await service.moderation_lists.get_list("cytu.be", "lounge")
-    await mod_list.add(username="Old", action="ban", moderator="admin", cytube_seen=True)
+    await mod_list.add(
+        username="Old", action="ban", moderator="admin", cytube_seen=True
+    )
 
     # Cytube no longer lists the ban.
     await service._handle_banlist_event(_event([]))
@@ -94,7 +98,9 @@ async def test_moderator_removal_race_suppresses_reimport(service):
 @pytest.mark.asyncio
 async def test_unenforced_moderator_ban_is_pushed(service):
     mod_list = await service.moderation_lists.get_list("cytu.be", "lounge")
-    await mod_list.add(username="Fresh", action="ban", moderator="admin", cytube_seen=False)
+    await mod_list.add(
+        username="Fresh", action="ban", moderator="admin", cytube_seen=False
+    )
 
     # Not yet present on Cytube.
     await service._handle_banlist_event(_event([]))
@@ -106,7 +112,9 @@ async def test_unenforced_moderator_ban_is_pushed(service):
 @pytest.mark.asyncio
 async def test_in_sync_marks_cytube_seen(service):
     mod_list = await service.moderation_lists.get_list("cytu.be", "lounge")
-    await mod_list.add(username="Sync", action="ban", moderator="admin", cytube_seen=False)
+    await mod_list.add(
+        username="Sync", action="ban", moderator="admin", cytube_seen=False
+    )
 
     payload = [{"id": 3, "name": "Sync", "ip": "*", "reason": "", "bannedby": "mod"}]
     await service._handle_banlist_event(_event(payload))

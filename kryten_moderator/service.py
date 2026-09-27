@@ -126,7 +126,9 @@ class ModeratorService:
         async def handle_banlist(event: Any):
             await self._handle_banlist_event(event)
 
-        self.logger.info(f"Registered {len(self.client._handlers)} event types with handlers")
+        self.logger.info(
+            f"Registered {len(self.client._handlers)} event types with handlers"
+        )
 
         # Connect to NATS (lifecycle events handled automatically via ServiceConfig)
         await self.client.connect()
@@ -161,9 +163,13 @@ class ModeratorService:
             if ch_name:
                 try:
                     await self.client.request_banlist(ch_name, domain=ch_domain)
-                    self.logger.info(f"Requested Cytube ban list for {ch_domain}/{ch_name}")
+                    self.logger.info(
+                        f"Requested Cytube ban list for {ch_domain}/{ch_name}"
+                    )
                 except Exception as e:
-                    self.logger.warning(f"Could not request ban list for {ch_name}: {e}")
+                    self.logger.warning(
+                        f"Could not request ban list for {ch_name}: {e}"
+                    )
 
         # Initialize IP managers for IP correlation (if enabled)
         mod_config = self.config.get("moderation", {})
@@ -194,7 +200,9 @@ class ModeratorService:
             self.logger.info("Lifecycle publisher initialized via KrytenClient")
 
         # Subscribe to robot startup - re-announce when robot starts
-        await self.client.subscribe("kryten.lifecycle.robot.startup", self._handle_robot_startup)
+        await self.client.subscribe(
+            "kryten.lifecycle.robot.startup", self._handle_robot_startup
+        )
         self.logger.info("Subscribed to kryten.lifecycle.robot.startup")
 
         # Initialize command handler for NATS queries using existing KrytenClient
@@ -203,9 +211,13 @@ class ModeratorService:
 
         # Initialize user connection history (in-memory, per-channel)
         retention_hours = mod_config.get("history_retention_hours", 12)
-        self.user_history = UserHistoryRegistry(retention_seconds=retention_hours * 3600)
+        self.user_history = UserHistoryRegistry(
+            retention_seconds=retention_hours * 3600
+        )
         self.user_history.initialize_all(channels)
-        self.logger.info(f"User history tracking initialized: {retention_hours}h retention")
+        self.logger.info(
+            f"User history tracking initialized: {retention_hours}h retention"
+        )
 
         # Seed user history and enforce moderation for users already in the channel
         for ch in channels:
@@ -273,7 +285,9 @@ class ModeratorService:
     async def _handle_robot_startup(self, event: Any) -> None:  # noqa: ARG002
         """Handle robot startup event to re-register with the ecosystem."""
         self._events_processed += 1
-        self.logger.info("Received robot startup notification, re-announcing service...")
+        self.logger.info(
+            "Received robot startup notification, re-announcing service..."
+        )
 
         # Re-announce via lifecycle if available
         if self.client and self.client.lifecycle:
@@ -323,7 +337,9 @@ class ModeratorService:
             self.logger.info(f"No users in KV userlist for {domain}/{channel}")
             return
 
-        self.logger.info(f"Seeding {len(users)} user(s) from KV userlist for {domain}/{channel}")
+        self.logger.info(
+            f"Seeding {len(users)} user(s) from KV userlist for {domain}/{channel}"
+        )
         now = datetime.now(timezone.utc)
         for user_data in users:
             if not isinstance(user_data, dict):
@@ -348,7 +364,9 @@ class ModeratorService:
 
         try:
             # Safe message preview for logging
-            msg_preview = (event.message or "")[:50] if event.message else "(no message)"
+            msg_preview = (
+                (event.message or "")[:50] if event.message else "(no message)"
+            )
             self.logger.debug(f"Chat message from {event.username}: {msg_preview}")
 
             # Track user
@@ -382,17 +400,23 @@ class ModeratorService:
 
             # Record join in user history (masked IP only — history is exposed externally)
             if self.user_history:
-                self.user_history.on_join(domain, event.channel, event.username, masked_ip)
+                self.user_history.on_join(
+                    domain, event.channel, event.username, masked_ip
+                )
 
             # Check moderation list for this channel
             if self.moderation_lists:
-                entry = self.moderation_lists.check_username(domain, event.channel, event.username)
+                entry = self.moderation_lists.check_username(
+                    domain, event.channel, event.username
+                )
 
                 if entry:
                     # User is directly on moderation list
                     # Store their IP with the entry if we have one
                     if ip:
-                        await self._add_ip_to_entry(domain, event.channel, event.username, ip)
+                        await self._add_ip_to_entry(
+                            domain, event.channel, event.username, ip
+                        )
                     await self._enforce_moderation(event, entry)
                     return
 
@@ -422,7 +446,9 @@ class ModeratorService:
 
             # Pattern matching check (if enabled)
             if self.pattern_managers:
-                pattern_manager = self.pattern_managers.get_manager_sync(domain, event.channel)
+                pattern_manager = self.pattern_managers.get_manager_sync(
+                    domain, event.channel
+                )
 
                 if pattern_manager:
                     pattern_result = pattern_manager.check_username(event.username)
@@ -437,7 +463,9 @@ class ModeratorService:
         except Exception as e:
             self.logger.error(f"Error handling user join: {e}", exc_info=True)
 
-    async def _add_ip_to_entry(self, domain: str, channel: str, username: str, ip: str) -> None:
+    async def _add_ip_to_entry(
+        self, domain: str, channel: str, username: str, ip: str
+    ) -> None:
         """Add an IP to a user's moderation entry and IP map.
 
         Args:
@@ -580,7 +608,9 @@ class ModeratorService:
             if entry.action == "ban":
                 # client.ban_user() sends command:"ban" — the robot has a direct handler
                 # for this. Confirmed via live NATS capture of the dispatch table.
-                await self.client.ban_user(channel, username, reason=entry.reason, domain=domain)
+                await self.client.ban_user(
+                    channel, username, reason=entry.reason, domain=domain
+                )
                 self._bans_enforced += 1
                 self.logger.warning(f"ENFORCED BAN: Banned {username} from {channel}")
 
@@ -591,7 +621,9 @@ class ModeratorService:
                     "robot", "smute", {"name": username}, domain=domain, channel=channel
                 )
                 self._smutes_enforced += 1
-                self.logger.info(f"ENFORCED SMUTE: Shadow muted {username} in {channel}")
+                self.logger.info(
+                    f"ENFORCED SMUTE: Shadow muted {username} in {channel}"
+                )
 
             elif entry.action == "mute":
                 # client.mute_user() sends command:"chat" which the robot ignores.
@@ -603,7 +635,9 @@ class ModeratorService:
                 self.logger.info(f"ENFORCED MUTE: Muted {username} in {channel}")
 
         except Exception as e:
-            self.logger.error(f"Failed to enforce {entry.action} on {username}: {e}", exc_info=True)
+            self.logger.error(
+                f"Failed to enforce {entry.action} on {username}: {e}", exc_info=True
+            )
 
     async def _ban_reconcile_loop(self) -> None:
         """Periodically request each channel's Cytube ban list to drive reconcile.
@@ -626,7 +660,9 @@ class ModeratorService:
                     try:
                         await self.client.request_banlist(ch_name, domain=ch_domain)
                     except Exception as e:  # noqa: BLE001
-                        self.logger.debug(f"Periodic ban-list request failed for {ch_name}: {e}")
+                        self.logger.debug(
+                            f"Periodic ban-list request failed for {ch_name}: {e}"
+                        )
         except asyncio.CancelledError:
             raise
         except Exception as e:  # noqa: BLE001
@@ -683,7 +719,10 @@ class ModeratorService:
                     cytube_by_name[name.lower()] = ban
 
             # Index moderator BAN entries by lowercased username.
-            mod_bans = {e.username.lower(): e for e in await mod_list.list_all(filter_action="ban")}
+            mod_bans = {
+                e.username.lower(): e
+                for e in await mod_list.list_all(filter_action="ban")
+            }
 
             imported: list[str] = []
 
@@ -735,7 +774,9 @@ class ModeratorService:
                             f"Ban for {cytube_ban.get('name')} still on Cytube after "
                             f"moderator removal — re-sending unban ({domain}/{channel})"
                         )
-                        await self._unban_on_cytube(domain, channel, cytube_ban.get("name", key))
+                        await self._unban_on_cytube(
+                            domain, channel, cytube_ban.get("name", key)
+                        )
                     elif tombstone and tombstone.origin == ORIGIN_CYTUBE:
                         # Removed on Cytube already; this is a stale snapshot still
                         # listing it. Suppress re-import until the tombstone ages out.
@@ -874,7 +915,10 @@ async def main():
         config_path = Path(args.config)
     else:
         # Try default locations in order
-        default_paths = [Path("/etc/kryten/kryten-moderator/config.json"), Path("config.json")]
+        default_paths = [
+            Path("/etc/kryten/kryten-moderator/config.json"),
+            Path("config.json"),
+        ]
 
         config_path = None
         for path in default_paths:

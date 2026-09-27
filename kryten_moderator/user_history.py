@@ -254,7 +254,9 @@ class UserHistoryRegistry:
     # Event routing — called by service.py
     # ------------------------------------------------------------------
 
-    def on_join(self, domain: str, channel: str, username: str, ip: str | None = None) -> None:
+    def on_join(
+        self, domain: str, channel: str, username: str, ip: str | None = None
+    ) -> None:
         self._ensure(domain, channel).on_join(username, ip)
 
     def on_leave(self, domain: str, channel: str, username: str) -> None:
@@ -275,5 +277,7 @@ class UserHistoryRegistry:
     def _ensure(self, domain: str, channel: str) -> UserHistoryManager:
         key = f"{domain}/{channel}"
         if key not in self._managers:
-            self._managers[key] = UserHistoryManager(domain, channel, self.retention_seconds)
+            self._managers[key] = UserHistoryManager(
+                domain, channel, self.retention_seconds
+            )
         return self._managers[key]

@@ -40,10 +40,19 @@ class TestSession:
 
     def test_to_dict_keys(self):
         s = Session(
-            joined_at=1_751_000_000.0, left_at=1_751_000_060.0, ip="1.2.3.x", message_count=3
+            joined_at=1_751_000_000.0,
+            left_at=1_751_000_060.0,
+            ip="1.2.3.x",
+            message_count=3,
         )
         d = s.to_dict()
-        assert set(d) == {"joined_at", "left_at", "duration_seconds", "ip", "message_count"}
+        assert set(d) == {
+            "joined_at",
+            "left_at",
+            "duration_seconds",
+            "ip",
+            "message_count",
+        }
         assert d["duration_seconds"] == pytest.approx(60.0)
         assert d["ip"] == "1.2.3.x"
         assert d["message_count"] == 3
@@ -121,7 +130,12 @@ class TestUserRecord:
         r = UserRecord(
             "Alice",
             sessions=[
-                Session(1_751_000_000.0, left_at=1_751_000_030.0, ip="1.2.3.x", message_count=2)
+                Session(
+                    1_751_000_000.0,
+                    left_at=1_751_000_030.0,
+                    ip="1.2.3.x",
+                    message_count=2,
+                )
             ],
         )
         d = r.to_dict(moderation_action="ban")
@@ -272,8 +286,12 @@ class TestUserHistoryManager:
         mgr._records["alice"] = UserRecord(
             "alice",
             sessions=[
-                Session(joined_at=now - 7200, left_at=now - 7190),  # 2h ago — outside 1h window
-                Session(joined_at=now - 1800, left_at=now - 1790),  # 30m ago — inside 1h window
+                Session(
+                    joined_at=now - 7200, left_at=now - 7190
+                ),  # 2h ago — outside 1h window
+                Session(
+                    joined_at=now - 1800, left_at=now - 1790
+                ),  # 30m ago — inside 1h window
             ],
         )
         results = mgr.query(window_seconds=3600, now=now)
@@ -295,7 +313,9 @@ class TestUserHistoryManager:
         mgr = self._mgr()
         now = time.time()
         # Session started 2 hours ago but still open
-        mgr._records["alice"] = UserRecord("alice", sessions=[Session(joined_at=now - 7200)])
+        mgr._records["alice"] = UserRecord(
+            "alice", sessions=[Session(joined_at=now - 7200)]
+        )
         results = mgr.query(window_seconds=3600, now=now)
         assert len(results) == 1
 
@@ -359,7 +379,9 @@ class TestUserHistoryRegistry:
         reg.initialize_all([{"domain": "cytu.be", "channel": "lounge"}])
         reg.on_join("cytu.be", "lounge", "Alice")
         reg.on_message("cytu.be", "lounge", "Alice")
-        assert reg.get_manager("cytu.be", "lounge")._records["alice"].total_messages == 1
+        assert (
+            reg.get_manager("cytu.be", "lounge")._records["alice"].total_messages == 1
+        )
 
     def test_on_leave_unknown_channel_is_noop(self):
         reg = UserHistoryRegistry()

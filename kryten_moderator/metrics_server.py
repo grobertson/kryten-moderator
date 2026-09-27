@@ -38,7 +38,9 @@ class MetricsServer(BaseMetricsServer):
         lines.append("")
 
         # Commands processed
-        lines.append("# HELP moderator_commands_processed Total NATS commands processed")
+        lines.append(
+            "# HELP moderator_commands_processed Total NATS commands processed"
+        )
         lines.append("# TYPE moderator_commands_processed counter")
         lines.append(f"moderator_commands_processed {self.app._commands_processed}")
         lines.append("")
@@ -50,7 +52,9 @@ class MetricsServer(BaseMetricsServer):
         lines.append("")
 
         # Messages flagged
-        lines.append("# HELP moderator_messages_flagged Total messages flagged for moderation")
+        lines.append(
+            "# HELP moderator_messages_flagged Total messages flagged for moderation"
+        )
         lines.append("# TYPE moderator_messages_flagged counter")
         lines.append(f"moderator_messages_flagged {self.app._messages_flagged}")
         lines.append("")
@@ -79,8 +83,14 @@ class MetricsServer(BaseMetricsServer):
 
         # Moderation features status
         moderation_config = self.app.config.get("moderation", {})
-        details["spam_detection_enabled"] = moderation_config.get("enable_spam_detection", False)
-        details["word_filter_enabled"] = moderation_config.get("enable_word_filter", False)
-        details["rate_limiting_enabled"] = moderation_config.get("enable_rate_limiting", False)
+        details["spam_detection_enabled"] = moderation_config.get(
+            "enable_spam_detection", False
+        )
+        details["word_filter_enabled"] = moderation_config.get(
+            "enable_word_filter", False
+        )
+        details["rate_limiting_enabled"] = moderation_config.get(
+            "enable_rate_limiting", False
+        )
 
         return details

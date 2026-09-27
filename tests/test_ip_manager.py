@@ -158,7 +158,9 @@ class TestIPManager:
         assert source_entry.action == "smute"
 
     @pytest.mark.asyncio
-    async def test_check_ip_correlation_excludes_self(self, mock_client, mock_moderation_list):
+    async def test_check_ip_correlation_excludes_self(
+        self, mock_client, mock_moderation_list
+    ):
         """Test that IP correlation excludes the user themselves."""
         manager = IPManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()
@@ -185,7 +187,9 @@ class TestIPManager:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_check_ip_correlation_not_found(self, mock_client, mock_moderation_list):
+    async def test_check_ip_correlation_not_found(
+        self, mock_client, mock_moderation_list
+    ):
         """Test IP correlation when no match found."""
         manager = IPManager(mock_client, "cytu.be", "lounge")
         await manager.initialize()

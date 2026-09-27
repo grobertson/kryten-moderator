@@ -148,7 +148,11 @@ class TombstoneList:
 
     async def prune(self) -> int:
         """Remove tombstones older than the TTL. Returns the count pruned."""
-        expired = [key for key, ts in self._cache.items() if ts.age_seconds() > self.ttl_seconds]
+        expired = [
+            key
+            for key, ts in self._cache.items()
+            if ts.age_seconds() > self.ttl_seconds
+        ]
         for key in expired:
             try:
                 await kv_delete(self._kv, key)
@@ -156,7 +160,9 @@ class TombstoneList:
                 self.logger.debug(f"Could not prune tombstone {key}: {e}")
             del self._cache[key]
         if expired:
-            self.logger.debug(f"Pruned {len(expired)} expired tombstone(s) in {self.channel}")
+            self.logger.debug(
+                f"Pruned {len(expired)} expired tombstone(s) in {self.channel}"
+            )
         return len(expired)
 
 
