@@ -17,6 +17,37 @@ from kryten import KrytenClient, kv_delete, kv_get, kv_keys, kv_put
 # Action types for moderation
 ActionType = Literal["ban", "smute", "mute"]
 
+# Standard default patterns covering hate symbols, numbers, and slurs
+DEFAULT_PATTERNS: list[str | dict] = [
+    "1488",
+    "卐",
+    "卍",
+    {
+        "pattern": r"^.*14/?88.*$",
+        "is_regex": True,
+        "action": "ban",
+        "description": "Nazi hate numbers",
+    },
+    {
+        "pattern": r"^.*h[i1]tl[e3]r.*$",
+        "is_regex": True,
+        "action": "ban",
+        "description": "Hitler references",
+    },
+    {
+        "pattern": r"^.*n[i1]gg[e3a]r.*$",
+        "is_regex": True,
+        "action": "ban",
+        "description": "Racial slur",
+    },
+    {
+        "pattern": r"^.*f[a@]gg[o0]t.*$",
+        "is_regex": True,
+        "action": "ban",
+        "description": "Homophobic slur",
+    },
+]
+
 # KV bucket prefix - actual bucket is per-channel
 KV_BUCKET_PREFIX = "kryten_moderator_patterns"
 
@@ -284,8 +315,7 @@ class PatternManager:
         self._patterns[key] = compiled
 
         self.logger.info(
-            f"Added pattern: '{pattern}' (regex={is_regex}, action={action}) "
-            f"for {self.channel}"
+            f"Added pattern: '{pattern}' (regex={is_regex}, action={action}) " f"for {self.channel}"
         )
         return entry
 
@@ -370,13 +400,12 @@ class PatternManagerRegistry:
         """
         self.client = client
         self.logger = logging.getLogger(__name__)
-        self._managers: dict[str, PatternManager] = (
-            {}
-        )  # "domain/channel" -> PatternManager
+        self._managers: dict[str, PatternManager] = {}  # "domain/channel" -> PatternManager
+        self._default_patterns: list | None = None
 
     def _make_key(self, domain: str, channel: str) -> str:
         """Create a key for the managers dict."""
-        return f"{domain}/{channel}"
+        return f"{domain.lower()}/{channel.lower()}"
 
     async def get_manager(
         self, domain: str, channel: str, default_patterns: list | None = None
@@ -395,7 +424,10 @@ class PatternManagerRegistry:
 
         if key not in self._managers:
             manager = PatternManager(self.client, domain, channel)
-            await manager.initialize(default_patterns)
+            patterns_to_seed = (
+                default_patterns if default_patterns is not None else self._default_patterns
+            )
+            await manager.initialize(patterns_to_seed)
             self._managers[key] = manager
 
         return self._managers[key]
@@ -409,11 +441,14 @@ class PatternManagerRegistry:
             channels: List of channel configs with 'domain' and 'channel' keys
             default_patterns: Default patterns to add to each channel
         """
+        self._default_patterns = (
+            default_patterns if default_patterns is not None else list(DEFAULT_PATTERNS)
+        )
         for ch in channels:
             domain = ch.get("domain", "cytu.be")
             channel = ch.get("channel")
             if channel:
-                await self.get_manager(domain, channel, default_patterns)
+                await self.get_manager(domain, channel, self._default_patterns)
 
         total = sum(m.count for m in self._managers.values())
         self.logger.info(

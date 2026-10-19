@@ -239,6 +239,9 @@ class UserHistoryRegistry:
         self.retention_seconds = retention_seconds
         self._managers: dict[str, UserHistoryManager] = {}
 
+    def _channel_key(self, domain: str, channel: str) -> str:
+        return f"{domain.lower()}/{channel.lower()}"
+
     def initialize_all(self, channels: list[dict]) -> None:
         """Pre-create a manager for every configured channel."""
         for ch in channels:
@@ -248,15 +251,13 @@ class UserHistoryRegistry:
                 self._ensure(domain, channel)
 
     def get_manager(self, domain: str, channel: str) -> UserHistoryManager | None:
-        return self._managers.get(f"{domain}/{channel}")
+        return self._managers.get(self._channel_key(domain, channel))
 
     # ------------------------------------------------------------------
     # Event routing — called by service.py
     # ------------------------------------------------------------------
 
-    def on_join(
-        self, domain: str, channel: str, username: str, ip: str | None = None
-    ) -> None:
+    def on_join(self, domain: str, channel: str, username: str, ip: str | None = None) -> None:
         self._ensure(domain, channel).on_join(username, ip)
 
     def on_leave(self, domain: str, channel: str, username: str) -> None:
@@ -275,9 +276,7 @@ class UserHistoryRegistry:
         return sum(m.user_count for m in self._managers.values())
 
     def _ensure(self, domain: str, channel: str) -> UserHistoryManager:
-        key = f"{domain}/{channel}"
+        key = self._channel_key(domain, channel)
         if key not in self._managers:
-            self._managers[key] = UserHistoryManager(
-                domain, channel, self.retention_seconds
-            )
+            self._managers[key] = UserHistoryManager(domain, channel, self.retention_seconds)
         return self._managers[key]

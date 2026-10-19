@@ -286,12 +286,8 @@ class TestUserHistoryManager:
         mgr._records["alice"] = UserRecord(
             "alice",
             sessions=[
-                Session(
-                    joined_at=now - 7200, left_at=now - 7190
-                ),  # 2h ago — outside 1h window
-                Session(
-                    joined_at=now - 1800, left_at=now - 1790
-                ),  # 30m ago — inside 1h window
+                Session(joined_at=now - 7200, left_at=now - 7190),  # 2h ago — outside 1h window
+                Session(joined_at=now - 1800, left_at=now - 1790),  # 30m ago — inside 1h window
             ],
         )
         results = mgr.query(window_seconds=3600, now=now)
@@ -313,9 +309,7 @@ class TestUserHistoryManager:
         mgr = self._mgr()
         now = time.time()
         # Session started 2 hours ago but still open
-        mgr._records["alice"] = UserRecord(
-            "alice", sessions=[Session(joined_at=now - 7200)]
-        )
+        mgr._records["alice"] = UserRecord("alice", sessions=[Session(joined_at=now - 7200)])
         results = mgr.query(window_seconds=3600, now=now)
         assert len(results) == 1
 
@@ -379,9 +373,7 @@ class TestUserHistoryRegistry:
         reg.initialize_all([{"domain": "cytu.be", "channel": "lounge"}])
         reg.on_join("cytu.be", "lounge", "Alice")
         reg.on_message("cytu.be", "lounge", "Alice")
-        assert (
-            reg.get_manager("cytu.be", "lounge")._records["alice"].total_messages == 1
-        )
+        assert reg.get_manager("cytu.be", "lounge")._records["alice"].total_messages == 1
 
     def test_on_leave_unknown_channel_is_noop(self):
         reg = UserHistoryRegistry()
@@ -415,3 +407,11 @@ class TestUserHistoryRegistry:
         reg.on_join("cytu.be", "music", "Bob")
         assert reg.get_manager("cytu.be", "lounge").user_count == 1
         assert reg.get_manager("cytu.be", "music").user_count == 1
+
+    def test_channel_lookup_is_case_insensitive(self):
+        reg = UserHistoryRegistry()
+        reg.initialize_all([{"domain": "cytu.be", "channel": "Channel-Z"}])
+        assert reg.get_manager("cytu.be", "channel-z") is not None
+        assert reg.get_manager("cytu.be", "CHANNEL-Z") is not None
+        reg.on_join("cytu.be", "channel-z", "Alice")
+        assert reg.get_manager("cytu.be", "Channel-Z").user_count == 1

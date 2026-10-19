@@ -43,9 +43,7 @@ class ModeratorCommandHandler:
             self.logger.info(f"Subscribed to {subject}")
 
         except Exception as e:
-            self.logger.error(
-                f"Failed to subscribe to command subjects: {e}", exc_info=True
-            )
+            self.logger.error(f"Failed to subscribe to command subjects: {e}", exc_info=True)
             raise
 
     async def disconnect(self) -> None:
@@ -137,9 +135,7 @@ class ModeratorCommandHandler:
                 "data": result,
             }
         except Exception as e:  # noqa: BLE001
-            self.logger.error(
-                f"Error executing command '{command}': {e}", exc_info=True
-            )
+            self.logger.error(f"Error executing command '{command}': {e}", exc_info=True)
             return {
                 "service": "moderator",
                 "command": command,
@@ -548,9 +544,7 @@ class ModeratorCommandHandler:
         if window_minutes <= 0:
             raise ValueError("window_minutes must be positive")
 
-        retention_hours = self.app.config.get("moderation", {}).get(
-            "history_retention_hours", 12
-        )
+        retention_hours = self.app.config.get("moderation", {}).get("history_retention_hours", 12)
         window_minutes = min(window_minutes, retention_hours * 60)
 
         if not self.app.user_history:
@@ -558,9 +552,7 @@ class ModeratorCommandHandler:
 
         mgr = self.app.user_history.get_manager(domain, channel)
         if mgr is None:
-            raise ValueError(
-                f"No history manager for channel '{channel}' on '{domain}'"
-            )
+            mgr = self.app.user_history._ensure(domain, channel)
 
         now = time.time()
         records = mgr.query(window_seconds=window_minutes * 60, now=now)
@@ -569,9 +561,7 @@ class ModeratorCommandHandler:
         for record in records:
             mod_action = None
             if self.app.moderation_lists:
-                entry = self.app.moderation_lists.check_username(
-                    domain, channel, record.username
-                )
+                entry = self.app.moderation_lists.check_username(domain, channel, record.username)
                 if entry:
                     mod_action = entry.action
             users_out.append(record.to_dict(moderation_action=mod_action))

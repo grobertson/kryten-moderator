@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-10-18
+
+### Fixed
+
+- **Standard ecosystem userlist KV bucket resolution**: `_get_online_users` now looks for
+  `kryten_{channel}_userlist` (matching `Kryten-Robot` and ecosystem architecture) as well
+  as normalized variants before falling back to legacy names. Users in the channel are now
+  successfully seeded on startup and after robot restarts.
+- **Recent users query resilience**: `UserHistoryRegistry` now normalizes domain/channel keys
+  case-insensitively, and `_handle_users_recent` creates a channel manager on demand if
+  queried before any join events have occurred, returning an empty list instead of failing
+  with an unhandled `ValueError`.
+- **Default pattern fallback**: Added `DEFAULT_PATTERNS` constant containing standard slur
+  and hate symbol/number regexes (`1488`, `卐`, `卍`, Hitler, racial slurs, homophobic slurs)
+  as a fallback when `default_patterns` is omitted from configuration.
+- **Config backward compatibility**: `_load_config()` now normalizes legacy/single `channel`
+  string configurations to the required `channels` list format automatically.
+
 ## [0.8.1] - 2026-08-04
 
 ### Changed

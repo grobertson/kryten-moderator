@@ -272,3 +272,16 @@ class TestPatternManagerRegistry:
 
         assert registry.manager_count == 2
         assert registry.total_patterns == 2  # 1 default per channel
+
+    @pytest.mark.asyncio
+    async def test_initialize_all_fallback_to_default_patterns(self, mock_client):
+        """Test initializing all channels falls back to DEFAULT_PATTERNS when none provided."""
+        from kryten_moderator.pattern_manager import DEFAULT_PATTERNS
+
+        registry = PatternManagerRegistry(mock_client)
+        channels = [{"domain": "cytu.be", "channel": "Channel-Z"}]
+
+        await registry.initialize_all(channels)
+
+        assert registry.manager_count == 1
+        assert registry.total_patterns == len(DEFAULT_PATTERNS)
